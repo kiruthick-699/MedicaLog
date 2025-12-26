@@ -56,6 +56,25 @@ export async function addDiagnosedCondition(
   userId: string,
   input: DiagnosedConditionInput
 ): Promise<DiagnosedConditionData> {
+  // Idempotent: return existing condition if one with same userId and name exists
+  const existing = await prisma.diagnosedCondition.findFirst({
+    where: {
+      userId,
+      name: input.name,
+    },
+  });
+
+  if (existing) {
+    return {
+      id: existing.id,
+      userId: existing.userId,
+      name: existing.name,
+      note: existing.note,
+      createdAt: existing.createdAt,
+      updatedAt: existing.updatedAt,
+    };
+  }
+
   const condition = await prisma.diagnosedCondition.create({
     data: {
       userId,
@@ -94,6 +113,24 @@ export async function addMedication(
   userId: string,
   input: MedicationInput
 ): Promise<MedicationData> {
+  // Idempotent: try to find existing medication by user and name
+  const existing = await prisma.medication.findFirst({
+    where: {
+      userId,
+      name: input.name,
+    },
+  });
+
+  if (existing) {
+    return {
+      id: existing.id,
+      userId: existing.userId,
+      name: existing.name,
+      createdAt: existing.createdAt,
+      updatedAt: existing.updatedAt,
+    };
+  }
+
   const medication = await prisma.medication.create({
     data: {
       userId,
@@ -136,6 +173,29 @@ export async function addMedicationSchedule(
   medicationId: string,
   input: MedicationScheduleInput
 ): Promise<MedicationScheduleData> {
+  // Idempotent: avoid duplicate schedules for the same medication with same timing
+  const existing = await prisma.medicationSchedule.findFirst({
+    where: {
+      medicationId,
+      timeSlot: input.timeSlot,
+      frequency: input.frequency,
+      timing: input.timing,
+    },
+  });
+
+  if (existing) {
+    return {
+      id: existing.id,
+      medicationId: existing.medicationId,
+      timeSlot: existing.timeSlot,
+      frequency: existing.frequency,
+      timing: existing.timing,
+      note: existing.note,
+      createdAt: existing.createdAt,
+      updatedAt: existing.updatedAt,
+    };
+  }
+
   const schedule = await prisma.medicationSchedule.create({
     data: {
       medicationId,
