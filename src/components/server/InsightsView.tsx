@@ -1,5 +1,6 @@
 import { generateMockPatientWithData, prepareDashboardAwareness } from "@/lib/data/preparation";
 import { getAwarenessFlag } from "@/lib/logic/awareness";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function InsightsView() {
   const patient = generateMockPatientWithData();
@@ -7,38 +8,48 @@ export function InsightsView() {
   const awarenessFlag = getAwarenessFlag(awareness.adherenceRate);
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-4xl mx-auto px-4 py-10 space-y-8">
-        <header className="space-y-2">
+    <main className="min-h-screen bg-white" aria-labelledby="insights-title">
+      <div className="max-w-4xl mx-auto px-4 py-12 space-y-10">
+        <header className="space-y-3">
           <p className="text-sm font-semibold text-blue-700">Insights & Awareness</p>
-          <h1 className="text-3xl font-bold text-gray-900">Overview</h1>
-          <p className="text-gray-600">
-            Informational summary based on current medication and condition data. This is not a diagnosis or treatment plan.
+          <h1 id="insights-title" className="text-4xl font-bold text-gray-900 tracking-tight">Overview</h1>
+          <p className="text-base text-gray-700">
+            Neutral, informational summary of your current setup. This is not medical advice, diagnosis, or treatment.
           </p>
         </header>
 
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-            <p className="text-sm text-gray-500">Medications</p>
-            <p className="text-2xl font-semibold text-gray-900">{awareness.totalMedications}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Medications</p>
+            <p className="text-3xl font-semibold text-gray-900 mt-1">{awareness.totalMedications}</p>
+            <p className="text-[13px] text-gray-600 mt-2">Informational awareness only.</p>
           </div>
           <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-            <p className="text-sm text-gray-500">Conditions (reference)</p>
-            <p className="text-2xl font-semibold text-gray-900">{awareness.totalConditions}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Conditions (informational)</p>
+            <p className="text-3xl font-semibold text-gray-900 mt-1">{awareness.totalConditions}</p>
+            <p className="text-[13px] text-gray-600 mt-2">Not a diagnostic or recommendation system.</p>
           </div>
-          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-            <p className="text-sm text-gray-500">Adherence rate</p>
-            <p className="text-2xl font-semibold text-gray-900">{awareness.adherenceRate}%</p>
-          </div>
-          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-            <p className="text-sm text-gray-500">Awareness flag</p>
-            <p className="text-lg font-semibold text-gray-900">{awarenessFlag}</p>
-          </div>
+          {awareness.totalMedications === 0 && awareness.totalConditions === 0 && (
+            <EmptyState
+              title="No data yet"
+              description="Add medications or conditions to see awareness summaries."
+            />
+          )}
+            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Adherence rate</p>
+              <p className="text-3xl font-semibold text-gray-900 mt-1">{awareness.adherenceRate}%</p>
+            <p className="text-[13px] text-gray-600 mt-2">For awareness; consult your healthcare professional.</p>
+            </div>
+            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Awareness flag</p>
+              <p className="text-xl font-semibold text-gray-900 mt-1">{awarenessFlag}</p>
+            <p className="text-[13px] text-gray-600 mt-2">Neutral indicator, not clinical guidance.</p>
+            </div>
         </section>
 
-        <section className="border border-gray-200 rounded-xl p-6 bg-white space-y-4">
+        <section className="border border-gray-200 rounded-xl p-6 bg-white space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Upcoming doses</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Upcoming doses</h2>
             <p className="text-sm text-gray-500">Next 4 hours</p>
           </div>
           {awareness.upcomingMedications.length === 0 ? (
@@ -61,13 +72,13 @@ export function InsightsView() {
           )}
         </section>
 
-        <section className="border border-amber-200 bg-amber-50 text-amber-900 rounded-xl p-4">
+        <section className="border border-amber-200 bg-amber-50 text-amber-900 rounded-xl p-4" aria-label="Informational notice">
           <p className="text-sm font-medium">Important</p>
           <p className="text-sm mt-1">
-            This information is informational only. Always consult qualified healthcare professionals for medical decisions, diagnosis, or treatment.
+            Content shown here is for information only. Consult qualified healthcare professionals for medical decisions, diagnosis, or treatment.
           </p>
         </section>
       </div>
-    </div>
+    </main>
   );
 }
