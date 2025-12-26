@@ -1,96 +1,84 @@
 # MedicaLog
 
-A Patient-Centered Chronic Care Monitoring System
+A patient-centered, informational chronic care tracking app built with Next.js.
 
-## Overview
+This repository is intentionally server-first: pages and components are Server Components by default, and client-side code is used only where necessary (for the single login form boundary).
 
-MedicaLog is a Next.js application designed to help patients manage their chronic care routines. It provides medication scheduling, adherence tracking, and condition awareness without medical advice or diagnosis.
+Quick highlights
+- Server-first App Router (Next.js 16)
+- Prisma (SQLite) for local development
+- NextAuth (Auth.js) with Prisma Adapter (server-only route)
+- Single client boundary for login UI (`LoginForm`)
 
-## Features
+Getting started
+---------------
 
-- **Medication Management** - Set up and track medication routines with time-based reminders
-- **Onboarding Flow** - Step-by-step setup for new users
-- **Condition Tracking** - Optional reference tracking of diagnosed conditions
-- **Server-First Architecture** - Built with Next.js App Router and Server Components
-
-## Getting Started
-
-### Prerequisites
-
+Prerequisites
 - Node.js 18+
-- npm or yarn
+- npm
 
-### Installation
-
-```bash
-# Install dependencies
+Install
+```
 npm install
+```
 
-# Run development server
+Run (development)
+```
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the application.
-
-### Available Routes
-
-- `/` - Welcome screen
-- `/onboarding` - Onboarding flow (step-based)
-- `/dashboard` - Dashboard (placeholder)
-
-## Project Structure
-
+Build
 ```
-src/
-├── app/                    # Next.js App Router
-│   ├── layout.tsx         # Root layout
-│   ├── page.tsx           # Welcome page
-│   ├── onboarding/        # Onboarding flow
-│   └── dashboard/         # Dashboard pages
-├── components/
-│   ├── ui/                # Stateless UI components
-│   ├── client/            # Client-only interactive components
-│   ├── server/            # Server-only helpers
-│   └── dashboard/         # Dashboard-specific components
-└── lib/
-    ├── data/              # Data preparation functions
-    ├── logic/             # Domain logic and models
-    └── validation/        # Type guards and validation schemas
-```
-
-## Development
-
-### Build
-
-```bash
 npm run build
 ```
 
-### Lint
+Useful project routes
+- `/` — Welcome
+- `/login` — Sign-in page (single client component for form state)
+- `/onboarding` — Informational onboarding steps
+- `/dashboard` — Protected dashboard (server-side auth guard)
+- `/insights` — Insights & awareness (server-side)
 
-```bash
-npm run lint
+Auth & server helpers
+---------------------
+
+- Server-only NextAuth route: `src/app/api/auth/[...nextauth]/route.ts` (uses shared server options)
+- Server auth helpers: `src/lib/server/auth/index.ts`
+    - `getCurrentUser()` — returns the authenticated user or `null` (server-side)
+    - `requireUser()` — enforces authentication and performs a server-side redirect or throws
+- Login server action: `src/lib/actions/auth.ts` (validates input, calls `signIn('credentials')`, redirects on success)
+- Client boundary for the form: `src/components/client/LoginForm.tsx` (only form state, no auth logic)
+
+Validation
+----------
+
+Input validation utilities are in `src/lib/validation/` and are used by server actions and persistence layer. They are pure TypeScript validators with explicit error results.
+
+Persistence (Prisma)
+--------------------
+
+- Schema: `prisma/schema.prisma`
+- Local DB (development): `prisma/dev.db` (configured via `DATABASE_URL`)
+
+Run migrations (development)
+```
+export DATABASE_URL="file:./prisma/dev.db"
+npx prisma migrate dev
+npx prisma generate
 ```
 
-## Technology Stack
+Notes and constraints
+---------------------
+- The app is informational only — it does not provide medical advice or recommendations.
+- Server-first design: avoid adding client components unless necessary.
+- No authentication UI hooks (no `useSession`) are used on the client; session handling is server-side.
 
-- **Framework** - Next.js 16 with App Router
-- **Language** - TypeScript (strict mode)
-- **Styling** - Tailwind CSS v4
-- **Linting** - ESLint
+Contributing
+------------
 
-## Architecture Principles
+Please open issues or PRs. Small, focused commits are preferred. If you make schema changes, include corresponding migrations and regenerate the Prisma client.
 
-- **Server-First** - Default to Server Components
-- **No State Libraries** - Simple React state management only
-- **Type-Safe** - Full TypeScript coverage
-- **Modular** - Clear separation of concerns
-- **No Barrel Exports** - Direct imports from files
-
-## Important Disclaimer
-
-This application is for informational purposes only and does not provide medical advice, diagnosis, or treatment recommendations. Always consult with healthcare professionals for medical decisions.
-
-## License
+License
+-------
 
 MIT
