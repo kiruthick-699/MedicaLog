@@ -6,6 +6,7 @@
 
 import { TimeSlot, type User, type DiagnosedCondition, type Medication, type MedicationSchedule } from "@prisma/client";
 import prisma from "./prisma";
+import { assertUserExists, assertMedicationBelongsToUser, assertAwarenessDataValid } from "@/lib/asserts";
 
 // === User ===
 
@@ -157,7 +158,11 @@ export async function createUserWithInitialData(options: {
     return result;
   } catch (err) {
     // Surface a clean server error
-    throw new Error("Failed to create user and initial data: " + (err instanceof Error ? err.message : String(err)));
+    // Log the full error server-side, but throw a safe DatabaseError to avoid leaking details
+    // eslint-disable-next-line no-console
+    console.error("createUserWithInitialData transaction failed:", err);
+    const { DatabaseError } = await import("@/lib/errors");
+    throw new DatabaseError("Failed to create user and initial data");
   }
 }
 
@@ -241,6 +246,8 @@ export async function addMedication(
   userId: string,
   input: MedicationInput
 ): Promise<MedicationData> {
+  // Cheap assertion: ensure userId is present. In dev this will also verify user exists.
+  await assertUserExists(userId);
   // Idempotent: try to find existing medication by user and name
   const existing = await prisma.medication.findFirst({
     where: {
@@ -301,6 +308,9 @@ export async function addMedicationSchedule(
   medicationId: string,
   input: MedicationScheduleInput
 ): Promise<MedicationScheduleData> {
+  // Assert inputs are sane and in dev verify medication belongs to a user
+  // We do not perform an extra DB call in production (assert helper is a no-op there)
+  await assertMedicationBelongsToUser(medicationId, input && (input as any).userId ? (input as any).userId : "");
   // Idempotent: avoid duplicate schedules for the same medication with same timing
   const existing = await prisma.medicationSchedule.findFirst({
     where: {
@@ -355,6 +365,8 @@ export async function createMedicationWithSchedules(
   schedules: MedicationScheduleInput[] = []
 ): Promise<MedicationWithSchedules> {
   try {
+    // In dev, assert that the user exists before proceeding; in production this is cheap check
+    await assertUserExists(userId);
     const result = await prisma.$transaction(async (tx) => {
       // find or create medication
       let med = await tx.medication.findFirst({ where: { userId, name: medication.name } });
@@ -413,7 +425,11 @@ export async function createMedicationWithSchedules(
 
     return result;
   } catch (err) {
-    throw new Error("Failed to create medication and schedules: " + (err instanceof Error ? err.message : String(err)));
+    // Log full error details on the server, return a safe error to the caller
+    // eslint-disable-next-line no-console
+    console.error("createMedicationWithSchedules transaction failed:", err);
+    const { DatabaseError } = await import("@/lib/errors");
+    throw new DatabaseError("Failed to create medication and schedules");
   }
 }
 
@@ -439,6 +455,17 @@ export async function getAwarenessSummary(userId: string): Promise<AwarenessSumm
       where: { medication: { userId } },
     }),
   ]);
+
+  const summary = {
+    userId,
+    totalConditions: conditionsCount,
+    totalMedications: medicationsCount,
+    totalSchedules: schedulesCount,
+    lastUpdated: new Date(),
+  };
+
+  // Assert summary data validity; in production this will only log if something odd appears
+  assertAwarenessDataValid({ totalMedications: summary.totalMedications, totalSchedules: summary.totalSchedules });
 
   return {
     userId,

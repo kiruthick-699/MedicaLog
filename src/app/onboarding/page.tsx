@@ -1,4 +1,20 @@
-export default function OnboardingPage() {
+import { getCurrentUser } from "@/lib/server/auth";
+import { getUserWithRelations } from "@/lib/data/persistence";
+import { redirect } from "next/navigation";
+
+export default async function OnboardingPage() {
+  // Server-side: if a user is authenticated, determine onboarding state and redirect
+  const current = await getCurrentUser();
+  if (current) {
+    const user = await getUserWithRelations(current.id);
+    // Deterministic rule: if the user already has any medications or conditions,
+    // consider onboarding complete (or partially complete) and send them to dashboard.
+    if (user && (user.medications.length > 0 || user.conditions.length > 0)) {
+      redirect("/dashboard");
+    }
+    // Otherwise, allow the authenticated user to complete onboarding server-side.
+  }
+
   return (
     <main className="min-h-screen bg-white" aria-labelledby="onboarding-title">
       <div className="max-w-3xl mx-auto px-4 py-12 space-y-10">

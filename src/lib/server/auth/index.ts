@@ -54,5 +54,6 @@ export async function requireUser(options: RequireUserOptions = {}): Promise<Cur
     // Default to NextAuth built-in sign-in route
     redirect(options.redirectTo ?? "/api/auth/signin");
   }
-  throw new Error("Unauthorized");
+    const { AuthError } = await import("@/lib/errors");
+    throw new AuthError();
 }
