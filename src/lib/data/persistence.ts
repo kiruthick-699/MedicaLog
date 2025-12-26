@@ -33,6 +33,134 @@ export async function createUser(input: UserCreateInput = {}): Promise<UserData>
   };
 }
 
+/**
+ * Create a user along with optional initial conditions and medications (and schedules).
+ * All writes are performed inside a transaction to ensure all-or-nothing behavior.
+ * The function is idempotent for nested items by checking for existing records within the transaction.
+ */
+export async function createUserWithInitialData(options: {
+  user?: UserCreateInput;
+  conditions?: DiagnosedConditionInput[];
+  medications?: Array<{
+    name: string;
+    schedules?: MedicationScheduleInput[];
+  }>;
+} = {}): Promise<{
+  user: UserData;
+  conditions: DiagnosedConditionData[];
+  medications: MedicationWithSchedules[];
+}> {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: {} });
+
+      const createdConditions: DiagnosedConditionData[] = [];
+      if (options.conditions && options.conditions.length > 0) {
+        for (const c of options.conditions) {
+          const existing = await tx.diagnosedCondition.findFirst({ where: { userId: user.id, name: c.name } });
+          if (existing) {
+            createdConditions.push({
+              id: existing.id,
+              userId: existing.userId,
+              name: existing.name,
+              note: existing.note,
+              createdAt: existing.createdAt,
+              updatedAt: existing.updatedAt,
+            });
+            continue;
+          }
+          const created = await tx.diagnosedCondition.create({ data: { userId: user.id, name: c.name, note: c.note || null } });
+          createdConditions.push({
+            id: created.id,
+            userId: created.userId,
+            name: created.name,
+            note: created.note,
+            createdAt: created.createdAt,
+            updatedAt: created.updatedAt,
+          });
+        }
+      }
+
+      const createdMedications: MedicationWithSchedules[] = [];
+      if (options.medications && options.medications.length > 0) {
+        for (const m of options.medications) {
+          // find or create medication
+          let medication = await tx.medication.findFirst({ where: { userId: user.id, name: m.name } });
+          if (!medication) {
+            medication = await tx.medication.create({ data: { userId: user.id, name: m.name } });
+          }
+
+          const schedules: MedicationScheduleData[] = [];
+          if (m.schedules && m.schedules.length > 0) {
+            for (const s of m.schedules) {
+              const existingSchedule = await tx.medicationSchedule.findFirst({
+                where: {
+                  medicationId: medication.id,
+                  timeSlot: s.timeSlot,
+                  frequency: s.frequency,
+                  timing: s.timing,
+                },
+              });
+              if (existingSchedule) {
+                schedules.push({
+                  id: existingSchedule.id,
+                  medicationId: existingSchedule.medicationId,
+                  timeSlot: existingSchedule.timeSlot,
+                  frequency: existingSchedule.frequency,
+                  timing: existingSchedule.timing,
+                  note: existingSchedule.note,
+                  createdAt: existingSchedule.createdAt,
+                  updatedAt: existingSchedule.updatedAt,
+                });
+                continue;
+              }
+              const createdSchedule = await tx.medicationSchedule.create({
+                data: {
+                  medicationId: medication.id,
+                  timeSlot: s.timeSlot,
+                  frequency: s.frequency,
+                  timing: s.timing,
+                  note: s.note || null,
+                },
+              });
+              schedules.push({
+                id: createdSchedule.id,
+                medicationId: createdSchedule.medicationId,
+                timeSlot: createdSchedule.timeSlot,
+                frequency: createdSchedule.frequency,
+                timing: createdSchedule.timing,
+                note: createdSchedule.note,
+                createdAt: createdSchedule.createdAt,
+                updatedAt: createdSchedule.updatedAt,
+              });
+            }
+          }
+
+          createdMedications.push({
+            id: medication.id,
+            userId: medication.userId,
+            name: medication.name,
+            schedules,
+            createdAt: medication.createdAt,
+            updatedAt: medication.updatedAt,
+          });
+        }
+      }
+
+      return {
+        user: { id: user.id, createdAt: user.createdAt, updatedAt: user.updatedAt },
+        conditions: createdConditions,
+        medications: createdMedications,
+      };
+    });
+
+    return result;
+  } catch (err) {
+    // Surface a clean server error
+    throw new Error("Failed to create user and initial data: " + (err instanceof Error ? err.message : String(err)));
+  }
+}
+
 // === Diagnosed Condition ===
 
 export interface DiagnosedConditionInput {
@@ -215,6 +343,78 @@ export async function addMedicationSchedule(
     createdAt: schedule.createdAt,
     updatedAt: schedule.updatedAt,
   };
+}
+
+/**
+ * Create a medication with schedules inside a transaction for all-or-nothing behavior.
+ * If the medication already exists (by userId and name), it is reused. Schedules are deduplicated.
+ */
+export async function createMedicationWithSchedules(
+  userId: string,
+  medication: MedicationInput,
+  schedules: MedicationScheduleInput[] = []
+): Promise<MedicationWithSchedules> {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // find or create medication
+      let med = await tx.medication.findFirst({ where: { userId, name: medication.name } });
+      if (!med) {
+        med = await tx.medication.create({ data: { userId, name: medication.name } });
+      }
+
+      const createdSchedules: MedicationScheduleData[] = [];
+      for (const s of schedules) {
+        const existing = await tx.medicationSchedule.findFirst({
+          where: { medicationId: med.id, timeSlot: s.timeSlot, frequency: s.frequency, timing: s.timing },
+        });
+        if (existing) {
+          createdSchedules.push({
+            id: existing.id,
+            medicationId: existing.medicationId,
+            timeSlot: existing.timeSlot,
+            frequency: existing.frequency,
+            timing: existing.timing,
+            note: existing.note,
+            createdAt: existing.createdAt,
+            updatedAt: existing.updatedAt,
+          });
+          continue;
+        }
+        const created = await tx.medicationSchedule.create({
+          data: {
+            medicationId: med.id,
+            timeSlot: s.timeSlot,
+            frequency: s.frequency,
+            timing: s.timing,
+            note: s.note || null,
+          },
+        });
+        createdSchedules.push({
+          id: created.id,
+          medicationId: created.medicationId,
+          timeSlot: created.timeSlot,
+          frequency: created.frequency,
+          timing: created.timing,
+          note: created.note,
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt,
+        });
+      }
+
+      return {
+        id: med.id,
+        userId: med.userId,
+        name: med.name,
+        schedules: createdSchedules,
+        createdAt: med.createdAt,
+        updatedAt: med.updatedAt,
+      };
+    });
+
+    return result;
+  } catch (err) {
+    throw new Error("Failed to create medication and schedules: " + (err instanceof Error ? err.message : String(err)));
+  }
 }
 
 // === Awareness Summary (neutral, no medical logic) ===
