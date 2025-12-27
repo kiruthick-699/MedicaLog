@@ -11,6 +11,7 @@
 import { redirect } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { validateEmail, validatePassword } from "@/lib/validation/inputSchemas";
+import { cookies } from "next/headers";
 
 export interface LoginInput {
   email: string;
@@ -66,4 +67,24 @@ export async function loginAction(input: LoginInput): Promise<LoginResult> {
       errors: ["An error occurred during sign-in"],
     };
   }
+}
+
+/**
+ * Server action: sign out by posting to the NextAuth signout endpoint.
+ * Relies on forwarded cookies; no client auth state.
+ */
+export async function logoutAction() {
+  const cookieHeader = cookies().toString();
+
+  await fetch("/api/auth/signout?callbackUrl=/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+    },
+    body: new URLSearchParams({ callbackUrl: "/" }).toString(),
+    cache: "no-store",
+  });
+
+  redirect("/");
 }

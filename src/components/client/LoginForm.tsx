@@ -8,12 +8,17 @@
 import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { loginAction } from "@/lib/actions/auth";
+import { signIn } from "next-auth/react";
 
-export function LoginForm() {
+type LoginFormProps = {
+  callbackUrl?: string;
+  initialError?: string;
+};
+
+export function LoginForm({ callbackUrl = "/dashboard", initialError }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>(initialError ? [initialError] : []);
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,11 +26,21 @@ export function LoginForm() {
     setErrors([]);
 
     startTransition(async () => {
-      const result = await loginAction({ email, password });
-      if (!result.ok && result.errors) {
-        setErrors(result.errors);
+      const res = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+        callbackUrl,
+      } as any);
+
+      if (res && (res as any).error) {
+        setErrors([ (res as any).error || "Invalid email or password" ]);
+        return;
       }
-      // On success, loginAction redirects server-side
+
+      // If successful, perform a client-side redirect to the callback URL
+      const target = (res && (res as any).url) || callbackUrl;
+      window.location.href = target;
     });
   };
 
@@ -64,8 +79,8 @@ export function LoginForm() {
       </div>
 
       {errors.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3" role="alert" aria-live="polite">
-          <ul className="text-sm text-red-700 space-y-1">
+        <div className="border border-black/20 bg-white p-3" role="alert" aria-live="polite">
+          <ul className="text-sm text-black/80 space-y-1">
             {errors.map((error, idx) => (
               <li key={idx}>{error}</li>
             ))}
@@ -74,7 +89,7 @@ export function LoginForm() {
       )}
 
       <Button type="submit" disabled={isPending} variant="primary">
-        {isPending ? "Signing in..." : "Sign in"}
+        Sign in
       </Button>
     </form>
   );

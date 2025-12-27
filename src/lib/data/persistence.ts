@@ -182,6 +182,8 @@ export interface DiagnosedConditionData {
   updatedAt: Date;
 }
 
+export interface DiagnosedConditionWithOwner extends DiagnosedConditionData {}
+
 /**
  * Add a diagnosed condition for a user
  */
@@ -223,6 +225,96 @@ export async function addDiagnosedCondition(
     createdAt: condition.createdAt,
     updatedAt: condition.updatedAt,
   };
+}
+
+export async function getDiagnosedConditionById(conditionId: string): Promise<DiagnosedConditionWithOwner | null> {
+  if (!conditionId || conditionId.trim().length === 0) return null;
+
+  const condition = await prisma.diagnosedCondition.findUnique({ where: { id: conditionId } });
+  if (!condition) return null;
+
+  return {
+    id: condition.id,
+    userId: condition.userId,
+    name: condition.name,
+    note: condition.note,
+    createdAt: condition.createdAt,
+    updatedAt: condition.updatedAt,
+  };
+}
+
+export async function getDiagnosedConditionsForUser(userId: string): Promise<DiagnosedConditionData[]> {
+  const conditions = await prisma.diagnosedCondition.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
+  return conditions.map((c) => ({
+    id: c.id,
+    userId: c.userId,
+    name: c.name,
+    note: c.note,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+  }));
+}
+
+export async function updateDiagnosedCondition(
+  userId: string,
+  conditionId: string,
+  input: DiagnosedConditionInput
+): Promise<DiagnosedConditionData> {
+  if (!conditionId || conditionId.trim().length === 0) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Invalid condition identifier"]);
+  }
+
+  const condition = await prisma.diagnosedCondition.findUnique({ where: { id: conditionId } });
+  if (!condition || condition.userId !== userId) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Condition not found or not accessible"]);
+  }
+
+  // Idempotency: if unchanged, return existing
+  const unchanged =
+    condition.name === input.name &&
+    (condition.note || "") === (input.note || "");
+
+  if (unchanged) {
+    return {
+      id: condition.id,
+      userId: condition.userId,
+      name: condition.name,
+      note: condition.note,
+      createdAt: condition.createdAt,
+      updatedAt: condition.updatedAt,
+    };
+  }
+
+  const updated = await prisma.diagnosedCondition.update({
+    where: { id: conditionId },
+    data: { name: input.name, note: input.note ?? null },
+  });
+
+  return {
+    id: updated.id,
+    userId: updated.userId,
+    name: updated.name,
+    note: updated.note,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
+  };
+}
+
+export async function deleteDiagnosedCondition(userId: string, conditionId: string): Promise<void> {
+  if (!conditionId || conditionId.trim().length === 0) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Invalid condition identifier"]);
+  }
+
+  const condition = await prisma.diagnosedCondition.findUnique({ where: { id: conditionId } });
+  if (!condition || condition.userId !== userId) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Condition not found or not accessible"]);
+  }
+
+  await prisma.diagnosedCondition.delete({ where: { id: conditionId } });
 }
 
 // === Medication ===
@@ -281,6 +373,55 @@ export async function addMedication(
   };
 }
 
+/**
+ * Update a medication's name (idempotent, enforces ownership and uniqueness per user)
+ */
+export async function updateMedicationName(
+  userId: string,
+  medicationId: string,
+  newName: string
+): Promise<MedicationData> {
+  await assertUserExists(userId);
+  await assertMedicationBelongsToUser(medicationId, userId);
+
+  // If another medication with the same name exists for this user, prevent duplicates
+  const existingSameName = await prisma.medication.findFirst({
+    where: { userId, name: newName },
+  });
+  if (existingSameName && existingSameName.id !== medicationId) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["A medication with this name already exists"]);
+  }
+
+  // Fetch current to check idempotency
+  const current = await prisma.medication.findUnique({ where: { id: medicationId } });
+  if (!current) {
+    const { DatabaseError } = await import("@/lib/errors");
+    throw new DatabaseError("Medication not found");
+  }
+  if (current.name === newName) {
+    return {
+      id: current.id,
+      userId: current.userId,
+      name: current.name,
+      createdAt: current.createdAt,
+      updatedAt: current.updatedAt,
+    };
+  }
+
+  const updated = await prisma.medication.update({
+    where: { id: medicationId },
+    data: { name: newName },
+  });
+  return {
+    id: updated.id,
+    userId: updated.userId,
+    name: updated.name,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
+  };
+}
+
 // === Medication Schedule ===
 
 export interface MedicationScheduleInput {
@@ -299,6 +440,14 @@ export interface MedicationScheduleData {
   note: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface MedicationScheduleWithMedication extends MedicationScheduleData {
+  medication: {
+    id: string;
+    userId: string;
+    name: string;
+  };
 }
 
 /**
@@ -353,6 +502,130 @@ export async function addMedicationSchedule(
     createdAt: schedule.createdAt,
     updatedAt: schedule.updatedAt,
   };
+}
+
+/**
+ * Get a schedule with its medication and user ownership for enforcement.
+ */
+export async function getMedicationScheduleWithOwnership(
+  scheduleId: string
+): Promise<MedicationScheduleWithMedication | null> {
+  if (!scheduleId || scheduleId.trim().length === 0) return null;
+
+  const schedule = await prisma.medicationSchedule.findUnique({
+    where: { id: scheduleId },
+    include: { medication: true },
+  });
+
+  if (!schedule) return null;
+
+  return {
+    id: schedule.id,
+    medicationId: schedule.medicationId,
+    timeSlot: schedule.timeSlot,
+    frequency: schedule.frequency,
+    timing: schedule.timing,
+    note: schedule.note,
+    createdAt: schedule.createdAt,
+    updatedAt: schedule.updatedAt,
+    medication: {
+      id: schedule.medication.id,
+      userId: schedule.medication.userId,
+      name: schedule.medication.name,
+    },
+  };
+}
+
+/**
+ * Update a medication schedule with ownership enforcement and idempotency.
+ */
+export async function updateMedicationSchedule(
+  userId: string,
+  medicationId: string,
+  scheduleId: string,
+  input: MedicationScheduleInput
+): Promise<MedicationScheduleData> {
+  if (!scheduleId || scheduleId.trim().length === 0) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Invalid schedule identifier"]);
+  }
+
+  const schedule = await prisma.medicationSchedule.findUnique({
+    where: { id: scheduleId },
+    include: { medication: true },
+  });
+
+  if (!schedule || schedule.medicationId !== medicationId || schedule.medication.userId !== userId) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Medication schedule not found or not accessible"]);
+  }
+
+  // Idempotency check
+  const unchanged =
+    schedule.timeSlot === input.timeSlot &&
+    schedule.frequency === input.frequency &&
+    schedule.timing === input.timing &&
+    (schedule.note || "") === (input.note || "");
+
+  if (unchanged) {
+    return {
+      id: schedule.id,
+      medicationId: schedule.medicationId,
+      timeSlot: schedule.timeSlot,
+      frequency: schedule.frequency,
+      timing: schedule.timing,
+      note: schedule.note,
+      createdAt: schedule.createdAt,
+      updatedAt: schedule.updatedAt,
+    };
+  }
+
+  const updated = await prisma.medicationSchedule.update({
+    where: { id: scheduleId },
+    data: {
+      timeSlot: input.timeSlot,
+      frequency: input.frequency,
+      timing: input.timing,
+      note: input.note || null,
+    },
+  });
+
+  return {
+    id: updated.id,
+    medicationId: updated.medicationId,
+    timeSlot: updated.timeSlot,
+    frequency: updated.frequency,
+    timing: updated.timing,
+    note: updated.note,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
+  };
+}
+
+/**
+ * Delete a medication schedule with ownership enforcement. Idempotent-safe: throws a controlled error if missing or unauthorized.
+ */
+export async function deleteMedicationSchedule(
+  userId: string,
+  medicationId: string,
+  scheduleId: string
+): Promise<void> {
+  if (!scheduleId || scheduleId.trim().length === 0) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Invalid schedule identifier"]);
+  }
+
+  const schedule = await prisma.medicationSchedule.findUnique({
+    where: { id: scheduleId },
+    include: { medication: true },
+  });
+
+  if (!schedule || schedule.medicationId !== medicationId || schedule.medication.userId !== userId) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Medication schedule not found or not accessible"]);
+  }
+
+  await prisma.medicationSchedule.delete({ where: { id: scheduleId } });
 }
 
 /**
@@ -537,6 +810,10 @@ export interface MedicationWithSchedules {
 export async function getMedicationWithSchedules(
   medicationId: string
 ): Promise<MedicationWithSchedules | null> {
+  // Defensive guard: avoid Prisma validation error when id is undefined/empty
+  if (!medicationId || typeof medicationId !== "string" || medicationId.trim().length === 0) {
+    return null;
+  }
   const medication = await prisma.medication.findUnique({
     where: { id: medicationId },
     include: { schedules: true },
@@ -561,4 +838,96 @@ export async function getMedicationWithSchedules(
     createdAt: medication.createdAt,
     updatedAt: medication.updatedAt,
   };
+}
+
+/**
+ * Delete a medication and all associated schedules in a single transaction.
+ * Enforces ownership and returns the deleted medication name for confirmation messaging.
+ */
+export async function deleteMedicationAndSchedules(
+  userId: string,
+  medicationId: string
+): Promise<string | null> {
+  if (!medicationId || medicationId.trim().length === 0) {
+    return null;
+  }
+
+  const med = await prisma.medication.findUnique({
+    where: { id: medicationId },
+    include: { schedules: true },
+  });
+
+  if (!med || med.userId !== userId) {
+    // Idempotent safe failure: not found or unauthorized
+    throw new Error("Medication not found or not accessible");
+  }
+
+  const deletedName = med.name;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.medicationSchedule.deleteMany({ where: { medicationId: med.id } });
+    await tx.medication.delete({ where: { id: med.id } });
+  });
+
+  return deletedName;
+}
+
+/**
+ * Wipe all user data (medications, schedules, conditions) in a transaction.
+ * Used for both reset and account deletion flows.
+ * Enforces ownership and is idempotent.
+ */
+export async function wipeUserData(userId: string): Promise<void> {
+  if (!userId || userId.trim().length === 0) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Invalid user identifier"]);
+  }
+
+  // Verify user exists
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["User not found"]);
+  }
+
+  // Delete all data in transaction (order matters for FK constraints)
+  await prisma.$transaction(async (tx) => {
+    // Delete all medication schedules first
+    await tx.medicationSchedule.deleteMany({ where: { medication: { userId } } });
+    // Delete all medications
+    await tx.medication.deleteMany({ where: { userId } });
+    // Delete all conditions
+    await tx.diagnosedCondition.deleteMany({ where: { userId } });
+  });
+}
+
+/**
+ * Delete a user account entirely.
+ * First wipes all user data, then deletes the user record.
+ * Uses transaction for atomicity.
+ */
+export async function deleteUserAccount(userId: string): Promise<void> {
+  if (!userId || userId.trim().length === 0) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Invalid user identifier"]);
+  }
+
+  // Verify user exists
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["User not found"]);
+  }
+
+  // Delete in transaction: data first, then user
+  await prisma.$transaction(async (tx) => {
+    // Delete all medication schedules first
+    await tx.medicationSchedule.deleteMany({ where: { medication: { userId } } });
+    // Delete all medications
+    await tx.medication.deleteMany({ where: { userId } });
+    // Delete all conditions
+    await tx.diagnosedCondition.deleteMany({ where: { userId } });
+    // Delete the user
+    await tx.user.delete({ where: { id: userId } });
+  });
 }
