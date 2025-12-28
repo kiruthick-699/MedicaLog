@@ -15,11 +15,18 @@ enum TimeSlot {
   NIGHT
 }
 
+// IntakeStatus enum: binary logging status for medication intake
+enum IntakeStatus {
+  TAKEN
+  MISSED
+}
+
 // User: patient identity and timestamps
 model User {
   id            String               @id @default(cuid())
   conditions    DiagnosedCondition[]
   medications   Medication[]
+  intakeLogs    MedicationIntakeLog[]
   accounts      Account[]
   sessions      Session[]
   createdAt     DateTime             @default(now())
@@ -92,6 +99,7 @@ model Medication {
   name          String
   schedules     MedicationSchedule[]
   conditions    DiagnosedCondition[]
+  intakeLogs    MedicationIntakeLog[]
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 
@@ -109,6 +117,29 @@ model MedicationSchedule {
   note          String?    // optional user note
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+  intakeLogs    MedicationIntakeLog[]
 
   @@index([medicationId])
+}
+
+// MedicationIntakeLog: immutable per (schedule x day) logging of intake
+model MedicationIntakeLog {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medicationId  String
+  medication    Medication    @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  scheduleId    String
+  schedule      MedicationSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  scheduledTime TimeSlot
+  actualTime    DateTime?
+  status        IntakeStatus
+  observation   String?
+  logDate       String        // YYYY-MM-DD to enforce per-day uniqueness
+  createdAt     DateTime      @default(now())
+
+  @@unique([scheduleId, logDate])
+  @@index([userId])
+  @@index([medicationId])
+  @@index([scheduleId])
 }

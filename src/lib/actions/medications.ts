@@ -18,6 +18,7 @@ import {
   validateFrequency,
   validateTiming,
   validateNote,
+  validateIntakeStatus,
 } from "@/lib/validation/inputSchemas";
 import { mapToSafeError, ValidationError } from "@/lib/errors";
 import { redirect } from "next/navigation";
@@ -53,6 +54,83 @@ export async function addMedicationAction(input: AddMedicationInput): Promise<Ad
     redirect(`/medications/${medication.id}?added=1`);
   } catch (err) {
     const safe = mapToSafeError(err, "Failed to add medication");
+    return { ok: false, errors: [safe.message] };
+  }
+}
+
+// === Intake Logging (Immutable) ===
+
+export interface LogMedicationIntakeInput {
+  medicationId: string;
+  scheduleId: string;
+  status: "TAKEN" | "MISSED";
+  observation?: string;
+  redirectTo?: string; // optional path to redirect after success
+}
+
+export interface LogMedicationIntakeResult {
+  ok: boolean;
+  errors?: string[];
+}
+
+import { createMedicationIntakeLog, getMedicationScheduleWithOwnership as getScheduleForOwnership, hasIntakeLogForToday } from "@/lib/data/persistence";
+
+/**
+ * Create an immutable intake log with ownership/uniqueness enforcement.
+ */
+export async function logMedicationIntakeAction(input: LogMedicationIntakeInput): Promise<LogMedicationIntakeResult> {
+  const user = await requireUser({ onFail: "throw" });
+
+  if (!input || typeof input !== "object") {
+    return { ok: false, errors: ["Invalid input"] };
+  }
+
+  const errors: string[] = [];
+  const statusValidation = validateIntakeStatus(input.status);
+  if (!statusValidation.ok) {
+    errors.push(...statusValidation.errors);
+  }
+  const observationValidation = validateNote(input.observation, 300);
+  if (!observationValidation.ok) {
+    errors.push(...observationValidation.errors);
+  }
+
+  if (!input.medicationId || input.medicationId.trim().length === 0) {
+    errors.push("Medication identifier is required");
+  }
+  if (!input.scheduleId || input.scheduleId.trim().length === 0) {
+    errors.push("Schedule identifier is required");
+  }
+
+  if (errors.length > 0) {
+    return { ok: false, errors };
+  }
+
+  try {
+    const schedule = await getScheduleForOwnership(input.scheduleId);
+    if (!schedule || schedule.medicationId !== input.medicationId || schedule.medication.userId !== user.id) {
+      return { ok: false, errors: ["Medication schedule not found or not accessible"] };
+    }
+
+    const already = await hasIntakeLogForToday(input.scheduleId);
+    if (already) {
+      return { ok: false, errors: ["Already logged today"] };
+    }
+
+    const statusVal = statusValidation.ok ? statusValidation.value : "TAKEN";
+    await createMedicationIntakeLog({
+      userId: user.id,
+      medicationId: input.medicationId,
+      scheduleId: input.scheduleId,
+      status: statusVal,
+      observation: observationValidation.ok ? observationValidation.value : undefined,
+      actualTime: null,
+    });
+
+    const to = input.redirectTo || `/medications/${input.medicationId}?intakeLogged=1`;
+    redirect(to);
+  } catch (err) {
+    const safe = mapToSafeError(err, "Failed to log intake");
     return { ok: false, errors: [safe.message] };
   }
 }

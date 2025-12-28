@@ -4,7 +4,7 @@
  * Returns plain JS/TS objects
  */
 
-import { TimeSlot, type User, type DiagnosedCondition, type Medication, type MedicationSchedule } from "@prisma/client";
+import { TimeSlot, IntakeStatus as PrismaIntakeStatus, type User, type DiagnosedCondition, type Medication, type MedicationSchedule, type MedicationIntakeLog } from "@prisma/client";
 import prisma from "./prisma";
 import { assertUserExists, assertMedicationBelongsToUser, assertAwarenessDataValid } from "@/lib/asserts";
 
@@ -930,4 +930,137 @@ export async function deleteUserAccount(userId: string): Promise<void> {
     // Delete the user
     await tx.user.delete({ where: { id: userId } });
   });
+}
+
+// === Medication Intake (Immutable Logs) ===
+
+export interface IntakeLogData {
+  id: string;
+  userId: string;
+  medicationId: string;
+  scheduleId: string;
+  scheduledTime: TimeSlot;
+  actualTime: Date | null;
+  status: PrismaIntakeStatus;
+  observation: string | null;
+  logDate: string;
+  createdAt: Date;
+}
+
+function todayDateStringUTC(): string {
+  // YYYY-MM-DD derived from UTC ISO timestamp
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Check if an intake log exists for a schedule for today (UTC date string)
+ */
+export async function hasIntakeLogForToday(scheduleId: string, dateString: string = todayDateStringUTC()): Promise<boolean> {
+  if (!scheduleId || scheduleId.trim().length === 0) return false;
+  const existing = await prisma.medicationIntakeLog.findFirst({ where: { scheduleId, logDate: dateString } });
+  return !!existing;
+}
+
+/**
+ * Create an immutable intake log entry. Enforces ownership and per-day uniqueness.
+ */
+export async function createMedicationIntakeLog(options: {
+  userId: string;
+  medicationId: string;
+  scheduleId: string;
+  status: PrismaIntakeStatus;
+  observation?: string;
+  actualTime?: Date | null;
+}): Promise<IntakeLogData> {
+  const { userId, medicationId, scheduleId, status } = options;
+
+  if (!userId || !medicationId || !scheduleId) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Missing identifiers for intake log creation"]);
+  }
+
+  // Fetch schedule with medication to enforce ownership and derive scheduledTime
+  const schedule = await prisma.medicationSchedule.findUnique({
+    where: { id: scheduleId },
+    include: { medication: true },
+  });
+
+  if (!schedule || schedule.medicationId !== medicationId || schedule.medication.userId !== userId) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Schedule not found or not accessible"]);
+  }
+
+  const logDate = todayDateStringUTC();
+  const existing = await prisma.medicationIntakeLog.findFirst({ where: { scheduleId, logDate } });
+  if (existing) {
+    const { ValidationError } = await import("@/lib/errors");
+    throw new ValidationError(["Already logged today"]);
+  }
+
+  const created = await prisma.medicationIntakeLog.create({
+    data: {
+      userId,
+      medicationId,
+      scheduleId,
+      scheduledTime: schedule.timeSlot,
+      actualTime: options.actualTime ?? null,
+      status,
+      observation: options.observation?.trim() || null,
+      logDate,
+    },
+  });
+
+  return {
+    id: created.id,
+    userId: created.userId,
+    medicationId: created.medicationId,
+    scheduleId: created.scheduleId,
+    scheduledTime: created.scheduledTime,
+    actualTime: created.actualTime ?? null,
+    status: created.status,
+    observation: created.observation ?? null,
+    logDate: created.logDate,
+    createdAt: created.createdAt,
+  };
+}
+
+export interface UserScheduleLogStatus {
+  scheduleId: string;
+  medicationId: string;
+  medicationName: string;
+  timeSlot: TimeSlot;
+  frequency: string;
+  timing: string;
+  note: string | null;
+  alreadyLoggedToday: boolean;
+}
+
+/**
+ * Get all schedules for the user along with whether intake has been logged today.
+ */
+export async function getUserSchedulesWithLogStatus(userId: string): Promise<UserScheduleLogStatus[]> {
+  if (!userId || userId.trim().length === 0) return [];
+
+  const schedules = await prisma.medicationSchedule.findMany({
+    where: { medication: { userId } },
+    include: { medication: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const dateString = todayDateStringUTC();
+  const results: UserScheduleLogStatus[] = [];
+  for (const s of schedules) {
+    const existing = await prisma.medicationIntakeLog.findFirst({ where: { scheduleId: s.id, logDate: dateString } });
+    results.push({
+      scheduleId: s.id,
+      medicationId: s.medicationId,
+      medicationName: s.medication.name,
+      timeSlot: s.timeSlot,
+      frequency: s.frequency,
+      timing: s.timing,
+      note: s.note ?? null,
+      alreadyLoggedToday: !!existing,
+    });
+  }
+  return results;
 }

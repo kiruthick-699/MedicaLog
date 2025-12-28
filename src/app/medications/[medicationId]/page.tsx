@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/server/auth";
-import { getMedicationWithSchedules } from "@/lib/data/persistence";
+import { getMedicationWithSchedules, hasIntakeLogForToday } from "@/lib/data/persistence";
 import { notFound } from "next/navigation";
+import LogIntakeForm from "@/components/client/LogIntakeForm";
 
 export default async function MedicationDetailsPage({ params, searchParams }: { params: Promise<{ medicationId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requireUser();
@@ -25,7 +26,8 @@ export default async function MedicationDetailsPage({ params, searchParams }: { 
           const scheduleDeleted = getParam("scheduleDeleted");
           const added = getParam("added");
           const scheduleAdded = getParam("scheduleAdded");
-          const any = updated === "1" || scheduleUpdated === "1" || scheduleDeleted === "1" || added === "1" || scheduleAdded === "1";
+          const intakeLogged = getParam("intakeLogged");
+          const any = updated === "1" || scheduleUpdated === "1" || scheduleDeleted === "1" || added === "1" || scheduleAdded === "1" || intakeLogged === "1";
           if (!any) return null;
           const message = added === "1"
             ? "Medication has been added."
@@ -35,6 +37,8 @@ export default async function MedicationDetailsPage({ params, searchParams }: { 
             ? "Medication details have been updated."
             : scheduleUpdated === "1"
             ? "Schedule has been updated."
+            : intakeLogged === "1"
+            ? "Intake logged successfully."
             : "Schedule has been removed.";
           return (
             <div className="border border-black/10 rounded-lg p-4 bg-white">
@@ -82,8 +86,10 @@ export default async function MedicationDetailsPage({ params, searchParams }: { 
                   Add schedule
                 </a>
               </div>
-              {med.schedules.map((s) => (
-                <div key={s.id} className="border border-black/10 rounded-lg p-4">
+              {await Promise.all(med.schedules.map(async (s) => {
+                const logged = await hasIntakeLogForToday(s.id);
+                return (
+                <div key={s.id} className="border border-black/10 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
                       <p className="text-sm text-black/80">Time slot: {s.timeSlot}</p>
@@ -96,8 +102,17 @@ export default async function MedicationDetailsPage({ params, searchParams }: { 
                       <a href={`/medications/${med.id}/schedules/${s.id}/delete`} className="underline">Delete schedule</a>
                     </div>
                   </div>
+                  <div className="border-t border-black/10 pt-3">
+                    <h3 className="text-sm font-semibold text-black">Log intake</h3>
+                    {logged ? (
+                      <p className="text-sm text-black/60">Already logged today</p>
+                    ) : (
+                      <LogIntakeForm medicationId={med.id} scheduleId={s.id} />
+                    )}
+                  </div>
                 </div>
-              ))}
+                );
+              }))}
             </div>
           )}
         </section>

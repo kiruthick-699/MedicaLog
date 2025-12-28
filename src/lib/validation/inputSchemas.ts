@@ -10,6 +10,9 @@ export type ValidationResult<T> = { ok: true; value: T } | { ok: false; errors: 
 // Mirror of Prisma TimeSlot enum without importing it
 export type TimeSlot = "MORNING" | "AFTERNOON" | "EVENING" | "NIGHT";
 
+// Intake status (binary)
+export type IntakeStatus = "TAKEN" | "MISSED";
+
 // -------------------------
 // Persistence Input Types
 // -------------------------
@@ -64,6 +67,17 @@ function validateLength(value: unknown, min: number, max: number): boolean {
 
 export function validateTimeSlot(value: unknown): value is TimeSlot {
   return value === "MORNING" || value === "AFTERNOON" || value === "EVENING" || value === "NIGHT";
+}
+
+// -------------------------
+// Intake Status Validator
+// -------------------------
+
+export function validateIntakeStatus(value: unknown): ValidationResult<IntakeStatus> {
+  if (value === "TAKEN" || value === "MISSED") {
+    return { ok: true, value: value as IntakeStatus };
+  }
+  return { ok: false, errors: ["Status must be either TAKEN or MISSED"] };
 }
 
 // -------------------------

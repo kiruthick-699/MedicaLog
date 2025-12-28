@@ -1,13 +1,16 @@
-import type { AwarenessSummaryData } from "@/lib/data/persistence";
+import type { AwarenessSummaryData, UserScheduleLogStatus } from "@/lib/data/persistence";
 import { EmptyState } from "@/components/ui/EmptyState";
+import QuickIntakeButton from "@/components/client/QuickIntakeButton";
 
 type DashboardViewProps = {
   summary: AwarenessSummaryData;
   adherenceRate: number;
   awarenessFlag: "On track" | "Needs attention";
+  quickSchedules: UserScheduleLogStatus[];
+  intakeLogged: boolean;
 };
 
-export default function DashboardView({ summary, adherenceRate, awarenessFlag }: DashboardViewProps) {
+export default function DashboardView({ summary, adherenceRate, awarenessFlag, quickSchedules, intakeLogged }: DashboardViewProps) {
   const hasMedications = summary.totalMedications > 0;
   const hasConditions = summary.totalConditions > 0;
 
@@ -23,6 +26,12 @@ export default function DashboardView({ summary, adherenceRate, awarenessFlag }:
             </a>
           </div>
         </header>
+
+        {intakeLogged ? (
+          <div className="border border-black/10 rounded-lg p-4 bg-white">
+            <p className="text-sm text-black/80">Intake logged successfully.</p>
+          </div>
+        ) : null}
 
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" aria-label="Summary cards">
           <div className="border border-black/10 rounded-xl p-6 bg-white min-h-32 flex flex-col justify-between">
@@ -96,6 +105,24 @@ export default function DashboardView({ summary, adherenceRate, awarenessFlag }:
                   Last updated {summary.lastUpdated.toLocaleString()} • All information is for awareness purposes only and not medical advice.
                 </p>
               </div>
+            </div>
+          </section>
+        )}
+
+        {hasMedications && quickSchedules.length > 0 && (
+          <section className="space-y-4" aria-label="Quick intake logging">
+            <h2 className="text-2xl font-bold text-black">Quick intake logging (today)</h2>
+            <p className="text-sm text-black/70">Mark taken or missed for each scheduled entry. No edits, no observations.</p>
+            <div className="space-y-3">
+              {quickSchedules.map((s) => (
+                <div key={s.scheduleId} className="border border-black/10 rounded-lg p-4 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm text-black/80"><span className="font-semibold">{s.medicationName}</span> — {s.timeSlot}</p>
+                    <p className="text-xs text-black/60">{s.frequency} • {s.timing}</p>
+                  </div>
+                  <QuickIntakeButton medicationId={s.medicationId} scheduleId={s.scheduleId} alreadyLogged={s.alreadyLoggedToday} />
+                </div>
+              ))}
             </div>
           </section>
         )}
