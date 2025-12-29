@@ -8,6 +8,7 @@ import {
 import { requireUser } from "@/lib/server/auth";
 import { validateConditionName, validateNote } from "@/lib/validation/inputSchemas";
 import { mapToSafeError } from "@/lib/errors";
+import { regenerateSnapshotAsync } from "@/lib/ai/generateAwarenessSnapshot";
 import { redirect } from "next/navigation";
 
 export interface EditConditionInput {
@@ -52,6 +53,11 @@ export async function editConditionAction(input: EditConditionInput): Promise<Ed
       note: safeNote,
     });
 
+    // Trigger async snapshot regeneration
+    regenerateSnapshotAsync(user.id, "30d").catch(() => {
+      // Silently ignore snapshot generation errors; user action succeeded
+    });
+
     // Success: redirect to list with confirmation
     const nameParam = encodeURIComponent(safeName || "Condition");
     redirect(`/conditions?updated=1&name=${nameParam}`);
@@ -85,6 +91,11 @@ export async function deleteConditionAction(input: DeleteConditionInput): Promis
 
     const nameParam = encodeURIComponent(existing.name || "Condition");
     await deleteDiagnosedCondition(user.id, input.conditionId);
+
+    // Trigger async snapshot regeneration
+    regenerateSnapshotAsync(user.id, "30d").catch(() => {
+      // Silently ignore snapshot generation errors; user action succeeded
+    });
 
     // Success: redirect to list with confirmation
     redirect(`/conditions?deleted=1&name=${nameParam}`);

@@ -1,15 +1,36 @@
-import type { AwarenessSummaryData } from "@/lib/data/persistence";
+import type { AwarenessSummaryData, AwarenessSnapshotData } from "@/lib/data/persistence";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 type InsightsViewProps = {
   summary: AwarenessSummaryData;
   adherenceRate: number;
   awarenessFlag: "On track" | "Needs attention";
+  aiSnapshot: AwarenessSnapshotData | null;
 };
 
-export function InsightsView({ summary, adherenceRate, awarenessFlag }: InsightsViewProps) {
+export function InsightsView({ summary, adherenceRate, awarenessFlag, aiSnapshot }: InsightsViewProps) {
   const hasMedications = summary.totalMedications > 0;
   const hasConditions = summary.totalConditions > 0;
+
+  // Parse AI snapshot data if it exists
+  let parsedSnapshot: {
+    medicationPatterns?: { findings?: string[] };
+    adherenceSignals?: { findings?: string[], severity?: "low" | "moderate" };
+    observationAssociations?: { findings?: string[] };
+  } | null = null;
+
+  if (aiSnapshot) {
+    try {
+      parsedSnapshot = {
+        medicationPatterns: JSON.parse(aiSnapshot.medicationPatterns),
+        adherenceSignals: JSON.parse(aiSnapshot.adherenceSignals),
+        observationAssociations: JSON.parse(aiSnapshot.observationAssociations),
+      };
+    } catch {
+      // If parsing fails, show snapshot exists but data is unavailable
+      parsedSnapshot = null;
+    }
+  }
 
   return (
     <main className="min-h-screen bg-white" aria-labelledby="insights-title">
@@ -112,6 +133,108 @@ export function InsightsView({ summary, adherenceRate, awarenessFlag }: Insights
                     <p className="text-sm text-black/70">Schedules</p>
                   </div>
                 </div>
+              </div>
+            </section>
+
+            {aiSnapshot && aiSnapshot.dataSufficiency && parsedSnapshot && (
+              <section className="border-t border-b border-black/10 bg-white py-10 px-6" aria-label="AI awareness analysis">
+                <div className="max-w-full space-y-10">
+                  <div className="space-y-2">
+                    <h2 className="text-3xl font-bold text-black">AI Awareness Analysis</h2>
+                    <p className="text-base text-black/75">
+                      Insights are generated using AI-assisted pattern analysis. This information is for awareness only and is not medical advice.
+                    </p>
+                  </div>
+
+                  {parsedSnapshot.medicationPatterns?.findings && parsedSnapshot.medicationPatterns.findings.length > 0 && (
+                    <div className="space-y-4 border-t border-black/10 pt-6">
+                      <h3 className="text-2xl font-semibold text-black">Medication Intake Patterns</h3>
+                      <ul className="space-y-3">
+                        {parsedSnapshot.medicationPatterns.findings.map((finding: string, idx: number) => (
+                          <li key={idx} className="flex gap-3">
+                            <span className="text-black/40 flex-shrink-0">•</span>
+                            <span className="text-sm text-black/80">{finding}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {parsedSnapshot.adherenceSignals?.findings && parsedSnapshot.adherenceSignals.findings.length > 0 && (
+                    <div className="space-y-4 border-t border-black/10 pt-6">
+                      <div className="flex items-baseline gap-4">
+                        <h3 className="text-2xl font-semibold text-black">Adherence Signals</h3>
+                        {parsedSnapshot.adherenceSignals.severity && (
+                          <span className="text-sm font-medium text-black/70">
+                            Severity: {parsedSnapshot.adherenceSignals.severity}
+                          </span>
+                        )}
+                      </div>
+                      <ul className="space-y-3">
+                        {parsedSnapshot.adherenceSignals.findings.map((finding: string, idx: number) => (
+                          <li key={idx} className="flex gap-3">
+                            <span className="text-black/40 flex-shrink-0">•</span>
+                            <span className="text-sm text-black/80">{finding}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {parsedSnapshot.observationAssociations?.findings && parsedSnapshot.observationAssociations.findings.length > 0 && (
+                    <div className="space-y-4 border-t border-black/10 pt-6">
+                      <h3 className="text-2xl font-semibold text-black">Observation Associations</h3>
+                      <p className="text-sm text-black/70 mb-4">
+                        User-reported observations associated temporally with intake events.
+                      </p>
+                      <ul className="space-y-3">
+                        {parsedSnapshot.observationAssociations.findings.map((finding: string, idx: number) => (
+                          <li key={idx} className="flex gap-3">
+                            <span className="text-black/40 flex-shrink-0">•</span>
+                            <span className="text-sm text-black/80">{finding}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {aiSnapshot && !aiSnapshot.dataSufficiency && (
+              <section className="border-t border-b border-black/10 bg-white py-10 px-6" aria-label="AI awareness analysis">
+                <div className="max-w-full space-y-4">
+                  <h2 className="text-2xl font-bold text-black">AI Awareness Analysis</h2>
+                  <p className="text-base text-black/75">
+                    Not enough data available yet to generate awareness insights.
+                  </p>
+                  <p className="text-sm text-black/70">
+                    Continue logging your medication intake and observations. Once sufficient data is collected, AI-generated insights will appear here.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {!aiSnapshot && (
+              <section className="border-t border-b border-black/10 bg-white py-10 px-6" aria-label="AI awareness analysis">
+                <div className="max-w-full space-y-4">
+                  <h2 className="text-2xl font-bold text-black">AI Awareness Analysis</h2>
+                  <p className="text-base text-black/75">
+                    Not enough data available yet to generate awareness insights.
+                  </p>
+                  <p className="text-sm text-black/70">
+                    Continue logging your medication intake and observations. Once sufficient data is collected, AI-generated insights will appear here.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            <section className="border-t border-black/10 bg-white py-10 px-6" aria-label="AI disclaimer">
+              <div className="max-w-3xl space-y-3">
+                <h2 className="text-lg font-semibold text-black">About AI Insights</h2>
+                <p className="text-sm text-black/70 leading-relaxed">
+                  Insights are generated using AI-assisted pattern analysis. This information is for awareness only and is not medical advice. AI analysis should not be used for diagnosis, treatment decisions, or clinical purposes. Always consult qualified healthcare professionals for medical guidance.
+                </p>
               </div>
             </section>
           </>

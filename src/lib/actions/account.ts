@@ -8,7 +8,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { wipeUserData, deleteUserAccount } from "@/lib/data/persistence";
+import { wipeUserData, deleteUserAccount, deleteSnapshotsForUser } from "@/lib/data/persistence";
 import { requireUser } from "@/lib/server/auth";
 import { mapToSafeError } from "@/lib/errors";
 import { cookies } from "next/headers";
@@ -27,6 +27,10 @@ export async function resetDataAction(): Promise<ResetDataResult> {
 
   try {
     await wipeUserData(user.id);
+    
+    // Clean up awareness snapshots
+    await deleteSnapshotsForUser(user.id);
+    
     redirect("/onboarding?reset=1");
   } catch (err) {
     const safe = mapToSafeError(err, "Failed to reset data");
@@ -49,6 +53,9 @@ export async function deleteAccountAction(): Promise<DeleteAccountResult> {
   try {
     // Delete user account and all associated data
     await deleteUserAccount(user.id);
+    
+    // Clean up awareness snapshots
+    await deleteSnapshotsForUser(user.id);
 
     // Sign out by posting to NextAuth signout endpoint
     const cookieHeader = cookies().toString();
@@ -69,4 +76,5 @@ export async function deleteAccountAction(): Promise<DeleteAccountResult> {
     return { ok: false, errors: [safe.message] };
   }
 }
+
 

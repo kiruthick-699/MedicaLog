@@ -27,6 +27,7 @@ model User {
   conditions    DiagnosedCondition[]
   medications   Medication[]
   intakeLogs    MedicationIntakeLog[]
+  snapshots     AwarenessSnapshot[]
   accounts      Account[]
   sessions      Session[]
   createdAt     DateTime             @default(now())
@@ -143,3 +144,21 @@ model MedicationIntakeLog {
   @@index([medicationId])
   @@index([scheduleId])
 }
+
+// AwarenessSnapshot: persistent AI-derived awareness output
+model AwarenessSnapshot {
+  id                      String   @id @default(cuid())
+  userId                  String
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timeWindow              String   // e.g., "7d", "14d", "30d"
+  medicationPatterns      String   // JSON: MedicationPattern[]
+  adherenceSignals        String   // JSON: AdherenceSignal[]
+  observationAssociations String   // JSON: ObservationAssociation[]
+  dataSufficiency         Boolean  // true if AI was run, false if insufficient data
+  generatedAt             DateTime @default(now())
+  createdAt               DateTime @default(now())
+
+  @@unique([userId, timeWindow])
+  @@index([userId])
+}
+

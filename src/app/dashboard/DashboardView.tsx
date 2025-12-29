@@ -1,4 +1,4 @@
-import type { AwarenessSummaryData, UserScheduleLogStatus } from "@/lib/data/persistence";
+import type { AwarenessSummaryData, UserScheduleLogStatus, AwarenessSnapshotData } from "@/lib/data/persistence";
 import { EmptyState } from "@/components/ui/EmptyState";
 import QuickIntakeButton from "@/components/client/QuickIntakeButton";
 
@@ -8,11 +8,32 @@ type DashboardViewProps = {
   awarenessFlag: "On track" | "Needs attention";
   quickSchedules: UserScheduleLogStatus[];
   intakeLogged: boolean;
+  aiSnapshot: AwarenessSnapshotData | null;
 };
 
-export default function DashboardView({ summary, adherenceRate, awarenessFlag, quickSchedules, intakeLogged }: DashboardViewProps) {
+export default function DashboardView({ summary, adherenceRate, awarenessFlag, quickSchedules, intakeLogged, aiSnapshot }: DashboardViewProps) {
   const hasMedications = summary.totalMedications > 0;
   const hasConditions = summary.totalConditions > 0;
+
+  // Count AI awareness signals if snapshot exists and has sufficient data
+  let aiSignalCount = 0;
+  if (aiSnapshot && aiSnapshot.dataSufficiency) {
+    try {
+      const patterns = JSON.parse(aiSnapshot.medicationPatterns);
+      const signals = JSON.parse(aiSnapshot.adherenceSignals);
+      const associations = JSON.parse(aiSnapshot.observationAssociations);
+      
+      // Count non-empty findings
+      aiSignalCount = [
+        patterns?.findings?.length || 0,
+        signals?.findings?.length || 0,
+        associations?.findings?.length || 0,
+      ].reduce((a, b) => a + b, 0);
+    } catch {
+      // If parsing fails, show 0 signals
+      aiSignalCount = 0;
+    }
+  }
 
   return (
     <main className="min-h-screen bg-white" aria-labelledby="dashboard-title">
@@ -99,6 +120,24 @@ export default function DashboardView({ summary, adherenceRate, awarenessFlag, q
                   </div>
                 </div>
               </div>
+
+              {aiSnapshot && (
+                <div className="border-t border-black/10 pt-6 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-black/60">AI awareness signals</p>
+                  {aiSnapshot.dataSufficiency ? (
+                    <p className="text-lg text-black/80">
+                      <span className="font-semibold">{aiSignalCount}</span> awareness signal{aiSignalCount === 1 ? '' : 's'} detected
+                    </p>
+                  ) : (
+                    <p className="text-lg text-black/80">
+                      Not enough data available yet to generate awareness insights.
+                    </p>
+                  )}
+                  <p className="text-xs text-black/50">
+                    <a href="/insights" className="underline hover:text-black">View detailed AI awareness »</a>
+                  </p>
+                </div>
+              )}
 
               <div className="border-t border-black/10 pt-6">
                 <p className="text-xs text-black/50">

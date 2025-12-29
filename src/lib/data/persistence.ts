@@ -1064,3 +1064,138 @@ export async function getUserSchedulesWithLogStatus(userId: string): Promise<Use
   }
   return results;
 }
+
+// === Awareness Snapshots (AI-derived) ===
+
+export interface AwarenessSnapshotData {
+  id: string;
+  userId: string;
+  timeWindow: string;
+  medicationPatterns: string; // JSON string
+  adherenceSignals: string; // JSON string
+  observationAssociations: string; // JSON string
+  dataSufficiency: boolean;
+  generatedAt: Date;
+  createdAt: Date;
+}
+
+/**
+ * Save or replace an awareness snapshot for a user and time window.
+ * Treats as derived state: entirely replaceable.
+ */
+export async function saveAwarenessSnapshot(options: {
+  userId: string;
+  timeWindow: string;
+  medicationPatterns: string;
+  adherenceSignals: string;
+  observationAssociations: string;
+  dataSufficiency: boolean;
+}): Promise<AwarenessSnapshotData> {
+  const { userId, timeWindow } = options;
+
+  const existing = await prisma.awarenessSnapshot.findUnique({
+    where: { userId_timeWindow: { userId, timeWindow } },
+  });
+
+  if (existing) {
+    const updated = await prisma.awarenessSnapshot.update({
+      where: { id: existing.id },
+      data: {
+        medicationPatterns: options.medicationPatterns,
+        adherenceSignals: options.adherenceSignals,
+        observationAssociations: options.observationAssociations,
+        dataSufficiency: options.dataSufficiency,
+        generatedAt: new Date(),
+      },
+    });
+    return {
+      id: updated.id,
+      userId: updated.userId,
+      timeWindow: updated.timeWindow,
+      medicationPatterns: updated.medicationPatterns,
+      adherenceSignals: updated.adherenceSignals,
+      observationAssociations: updated.observationAssociations,
+      dataSufficiency: updated.dataSufficiency,
+      generatedAt: updated.generatedAt,
+      createdAt: updated.createdAt,
+    };
+  }
+
+  const created = await prisma.awarenessSnapshot.create({
+    data: {
+      userId,
+      timeWindow,
+      medicationPatterns: options.medicationPatterns,
+      adherenceSignals: options.adherenceSignals,
+      observationAssociations: options.observationAssociations,
+      dataSufficiency: options.dataSufficiency,
+    },
+  });
+
+  return {
+    id: created.id,
+    userId: created.userId,
+    timeWindow: created.timeWindow,
+    medicationPatterns: created.medicationPatterns,
+    adherenceSignals: created.adherenceSignals,
+    observationAssociations: created.observationAssociations,
+    dataSufficiency: created.dataSufficiency,
+    generatedAt: created.generatedAt,
+    createdAt: created.createdAt,
+  };
+}
+
+/**
+ * Retrieve the latest awareness snapshot for a user and time window.
+ */
+export async function getLatestSnapshot(
+  userId: string,
+  timeWindow: string
+): Promise<AwarenessSnapshotData | null> {
+  const snapshot = await prisma.awarenessSnapshot.findUnique({
+    where: { userId_timeWindow: { userId, timeWindow } },
+  });
+
+  if (!snapshot) return null;
+
+  return {
+    id: snapshot.id,
+    userId: snapshot.userId,
+    timeWindow: snapshot.timeWindow,
+    medicationPatterns: snapshot.medicationPatterns,
+    adherenceSignals: snapshot.adherenceSignals,
+    observationAssociations: snapshot.observationAssociations,
+    dataSufficiency: snapshot.dataSufficiency,
+    generatedAt: snapshot.generatedAt,
+    createdAt: snapshot.createdAt,
+  };
+}
+
+/**
+ * Get all intake logs for a user within a date range.
+ */
+export async function getMedicationIntakeLogsForUser(userId: string, startDate: Date, endDate: Date) {
+  const startStr = startDate.toISOString().slice(0, 10);
+  const endStr = endDate.toISOString().slice(0, 10);
+  const logs = await prisma.medicationIntakeLog.findMany({
+    where: { userId, logDate: { gte: startStr, lte: endStr } },
+    orderBy: { logDate: "asc" },
+  });
+  return logs;
+}
+
+/**
+ * Get all intake logs for a user within a date range.
+ */
+export async function getMedicationIntakeLogs(userId: string, startDate: Date, endDate: Date) {
+  return getMedicationIntakeLogsForUser(userId, startDate, endDate);
+}
+
+/**
+ * Delete all awareness snapshots for a user.
+ */
+export async function deleteSnapshotsForUser(userId: string): Promise<void> {
+  await prisma.awarenessSnapshot.deleteMany({ where: { userId } });
+}
+
+

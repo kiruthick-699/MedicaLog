@@ -186,6 +186,74 @@ function parseAIResponse(text: string): AIPatternAnalysisResult | null {
 }
 
 // ---------------------------
+// Deterministic Signal Extraction (no AI required)
+// ---------------------------
+
+/**
+ * Extract deterministic signals directly from metrics without AI.
+ * Safe: no hallucinations, purely data-driven.
+ */
+function extractDeterministicSignals(
+  metrics: IntakeMetricsBundle
+): { adherenceSignals: AdherenceSignal[]; patterns: MedicationPattern[]; observationAssociations: ObservationAssociation[] } {
+  const adherenceSignals: AdherenceSignal[] = [];
+  const patterns: MedicationPattern[] = [];
+  const observationAssociations: ObservationAssociation[] = [];
+
+  // Use actual taken logs to determine sufficiency, not the percentage
+  const takenCount = metrics.adherence.takenCount;
+  const daysInWindow = metrics.timeWindow.days;
+
+  // Adherence signal: if taken is less than 80% of days (conservative)
+  if (takenCount < daysInWindow * 0.8) {
+    adherenceSignals.push({
+      signal: takenCount < daysInWindow * 0.5 ? "low_adherence" : "inconsistent_pattern",
+      medicationId: metrics.medicationId,
+      severity: takenCount < daysInWindow * 0.5 ? "moderate" : "low",
+    });
+  }
+
+  // Check for timing variance
+  for (const schedTiming of metrics.timing.perSchedule) {
+    if (schedTiming.avgAbsMinutes && schedTiming.avgAbsMinutes > 30) {
+      patterns.push({
+        type: "timing_inconsistency",
+        medicationId: metrics.medicationId,
+        context: `Timing variance: ${schedTiming.avgAbsMinutes.toFixed(0)}min avg offset`,
+        confidence: schedTiming.avgAbsMinutes > 60 ? "moderate" : "low",
+      });
+    }
+  }
+
+  // Check for missed streaks per schedule
+  for (const schedMissed of metrics.missed.perSchedule) {
+    if (schedMissed.longestMissedStreak >= 3) {
+      adherenceSignals.push({
+        signal: "missed_streak",
+        medicationId: metrics.medicationId,
+        severity: schedMissed.longestMissedStreak >= 5 ? "moderate" : "low",
+      });
+    }
+  }
+
+  // Observation associations: look for repeated observations
+  if (metrics.observations.frequencies) {
+    for (const [observation, count] of Object.entries(metrics.observations.frequencies)) {
+      const countNum = typeof count === "number" ? count : 0;
+      if (countNum >= 2) {
+        observationAssociations.push({
+          observation,
+          temporalRelation: "same_day",
+          confidence: countNum >= 3 ? "moderate" : "low",
+        });
+      }
+    }
+  }
+
+  return { adherenceSignals, patterns, observationAssociations };
+}
+
+// ---------------------------
 // Safe Invocation
 // ---------------------------
 
@@ -197,8 +265,8 @@ export async function analyzeIntakePatterns(
   metrics: IntakeMetricsBundle,
   openaiApiKey: string = process.env.OPENAI_API_KEY || ""
 ): Promise<AIPatternAnalysisResult> {
-  // Compute log count from metrics for sufficiency check
-  const logsInWindow = metrics.adherence.takenCount + (metrics.adherence.expectedCount - metrics.adherence.takenCount);
+  // Use the actual adherence counts from metrics
+  const logsInWindow = metrics.adherence.takenCount;
   const numSchedules = metrics.missed.perSchedule.length;
   const daysInWindow = metrics.timeWindow.days;
 
@@ -214,12 +282,13 @@ export async function analyzeIntakePatterns(
     };
   }
 
-  // Skip AI if no API key
+  // Skip AI if no API key, but still extract deterministic signals
   if (!openaiApiKey) {
+    const { adherenceSignals, patterns, observationAssociations } = extractDeterministicSignals(metrics);
     return {
-      medicationPatterns: [],
-      adherenceSignals: [],
-      observationAssociations: [],
+      medicationPatterns: patterns,
+      adherenceSignals,
+      observationAssociations,
       dataQuality: { logsInWindow, sufficiencyLevel: sufficiency },
     };
   }

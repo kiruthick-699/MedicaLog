@@ -104,8 +104,12 @@ MedicaLog uses a **server-first architecture** where business logic, validation,
 ## Key Features
 
 ### Dashboard & Overview
-- **Dashboard**: High-level view of current medications and conditions
-- **Insights**: Read-only, informational awareness (no trends or predictions)
+- **Dashboard**: High-level view of current medications and conditions; displays AI awareness signal count
+- **Insights & Awareness**: Detailed read-only view of AI-generated pattern analysis
+  - Medication intake patterns and timing observations
+  - Adherence signals (low/moderate severity)
+  - Temporal associations between user observations and intake
+  - Data sufficiency indicator (whether enough data exists for analysis)
 
 ### Medication Management
 - **Add medications**: Create entries with name validation
@@ -138,13 +142,61 @@ MedicaLog uses a **server-first architecture** where business logic, validation,
 
 ---
 
+## AI-Assisted Pattern Analysis
+
+MedicaLog includes **AI pattern analysis as a core feature**—but with explicit ethical boundaries.
+
+### How AI is Used
+
+The system continuously analyzes medication intake after every relevant data change:
+
+1. **Event-driven analysis**: Whenever the user logs an intake, updates a schedule, or adds observations, the system triggers AI analysis
+2. **Structured input**: AI receives deterministically extracted features:
+   - Medication intake timing (morning/afternoon/evening/night)
+   - Intake regularity (how often logged vs. scheduled)
+   - Temporal patterns (adherence over 7-day windows)
+   - User observations (if provided: dietary notes, energy, mood)
+3. **Constrained AI output**: AI generates a **"Awareness Snapshot"** containing:
+   - **Medication Intake Patterns**: Neutral observations about timing and frequency
+   - **Adherence Signals**: Low or moderate signals (no high-urgency alerts)
+   - **Observation Associations**: Temporal correlations between user notes and intake events
+4. **Persistent storage**: Snapshots are cached for quick retrieval; AI analysis runs once per analysis window (7-day default)
+5. **Read-only rendering**: The Dashboard and Insights pages display awareness without edits, recommendations, or actionable alerts
+
+### Why This Design
+
+AI in healthcare must be trustworthy. MedicaLog avoids:
+- **Hallucinations**: AI input is deterministic, not speculative
+- **Unsafe medical claims**: AI output is framed as patterns, not diagnoses
+- **Hidden decision-making**: Every AI analysis is visible and explainable
+- **Urgency or alarm**: Signals are low/moderate only; no high-urgency flags
+- **Behavioral manipulation**: No notifications or dark patterns
+
+This design ensures AI remains a tool for **awareness**, not decision-making or behavioral control.
+
+---
+
+## Ethical and Safety Boundaries of AI
+
+MedicaLog's AI explicitly **does not**:
+
+- ❌ **Diagnose or recommend**: AI identifies patterns; diagnosis and recommendations require healthcare professionals
+- ❌ **Generate clinical guidance**: No treatment suggestions, dosage advice, or medical instructions
+- ❌ **Issue alerts or urgency**: No high-severity flags, emergency notifications, or time-critical warnings
+- ❌ **Predict or score**: No risk assessments, health predictions, or severity ratings
+- ❌ **Replace professional judgment**: AI is informational only; health decisions remain with qualified providers
+- ❌ **Hallucinate or invent**: AI analysis is constrained to extracted features and explicit temporal relationships
+
+Medical interpretation and clinical decision-making remain exclusively with healthcare professionals. The system is an informational tool only.
+
+---
+
 ## What the Project Deliberately Avoids
 
 To maintain ethical clarity and architectural simplicity:
 
-- ❌ **No analytics or metrics**: No tracking of user behavior, feature usage, or engagement
-- ❌ **No AI or machine learning**: No trend prediction, anomaly detection, or pattern matching
-- ❌ **No recommendations**: No suggestions about medications, conditions, or health decisions
+- ❌ **No user behavior analytics**: No tracking of feature usage, engagement, or interaction patterns
+- ❌ **No recommendations**: No health suggestions (these remain AI-free and professional-only)
 - ❌ **No third-party integrations**: No syncing with health services, wearables, or external APIs
 - ❌ **No dark patterns**: No notifications, push alerts, or engagement hooks
 - ❌ **No soft deletes**: Deletions are permanent; no recovery or undo after confirmation
@@ -155,6 +207,40 @@ These omissions are **intentional design choices**, not roadmap items.
 ---
 
 ## Engineering Highlights
+
+### AI-Assisted Pattern Analysis Architecture
+
+MedicaLog's AI system follows a **constrained, explainable pipeline**:
+
+```
+Intake Logs (Immutable)
+         ↓
+Deterministic Feature Extraction (Metrics: timing, frequency, adherence)
+         ↓
+Constrained AI Analysis (Pattern recognition within extracted metrics)
+         ↓
+Awareness Snapshot Storage (Persistent, cacheable analysis results)
+         ↓
+Read-Only UI Rendering (Dashboard & Insights pages display awareness)
+```
+
+This design ensures:
+- **Traceability**: Every insight can be traced back to specific intake data
+- **Explainability**: AI receives only structured, deterministic input—no raw data or speculation
+- **Safety**: Output is constrained to low/moderate signals; no medical claims or urgency
+- **Auditability**: Snapshots are versioned and persistent, allowing review of analysis over time
+
+### Why Constrained AI for Healthcare
+
+Healthcare applications require extraordinary care. MedicaLog's AI design prioritizes:
+
+1. **Avoiding unsafe medical claims**: AI output is framed as patterns and associations, not diagnoses. This prevents users from making unsafe decisions based on algorithmic "insights."
+2. **Ensuring explainability**: Every pattern analysis is grounded in specific, visible user data and rules—no black-box predictions.
+3. **Maintaining user trust**: Transparent boundaries (what AI does and explicitly does not do) build confidence that the system will not make unexpected claims.
+4. **Preventing hallucination**: AI input is deterministic and constrained; it cannot invent relationships or speculate beyond the data.
+5. **Supporting long-term monitoring**: Persistent awareness snapshots allow users and healthcare providers to understand patterns over weeks and months.
+
+This architecture is deliberate, not a limitation. It trades off raw predictive power for trustworthiness and safety—which is the right trade-off for healthcare.
 
 ### Server-First Architecture
 - **All business logic on the server**: Validation, ownership checks, persistence
@@ -231,34 +317,64 @@ These omissions are **intentional design choices**, not roadmap items.
 
 **MedicaLog is an informational tool only.** It is not a medical device and does not provide medical advice, diagnosis, treatment, or recommendations.
 
-- **Not for clinical use**: This system is designed for personal awareness, not clinical decision-making
-- **Always consult professionals**: Medication and condition management decisions should be made with healthcare providers
-- **No liability claim**: Users accept full responsibility for their health decisions
+### Important Limitations
+
+- **Not a medical system**: This system is designed for personal awareness and data organization, not clinical decision-making
+- **Informational AI analysis**: AI-generated insights reflect patterns only; they are not diagnoses or clinical judgments
+- **Always consult professionals**: Medication and condition management decisions must be made with qualified healthcare providers
+- **No liability assumption**: Users accept full responsibility for their health decisions and outcomes
 - **Data privacy**: User data is stored locally in SQLite; no cloud backup or third-party access
 
+### AI-Specific Disclaimers
+
+- AI analysis is for **awareness only** and should not be used for clinical decisions
+- AI findings represent pattern associations, not causal relationships or medical explanations
+- Low/moderate signals from AI indicate temporal patterns, not urgency or risk levels
+- Healthcare professionals must validate any insights before they inform clinical decisions
+
+### Appropriate Use Cases
+
 This project is suitable for:
-- Faculty review of architecture and engineering practices
-- Portfolio demonstration of server-first design patterns
-- Educational context for understanding ethical software design
+- Personal medication and condition tracking
+- Discussion preparation for healthcare appointments (data organization)
+- Faculty review of architecture and ethical AI design
+- Portfolio demonstration of server-first patterns and responsible AI integration
+- Educational context for understanding transparent, constrained AI systems
+
+This project is **not** suitable for:
+- Standalone medical decision-making
+- Clinical environments without professional oversight
+- Replacing consultation with healthcare providers
+- Real-time patient monitoring or alerts
 
 ---
 
 ## Why This Project Matters
 
-Chronic care is personal and ongoing. Patients accumulate data over months and years—medications, dosages, side effects, conditions, responses. Existing apps often:
+Chronic care is personal and ongoing. Patients accumulate data over months and years—medications, dosages, observations, patterns. Existing apps often:
 
 1. **Collect without purpose**: Apps gather data to train models or improve engagement, not to serve users
 2. **Lock users in**: Deleting data is hard or impossible; users become trapped
-3. **Confuse tools with advice**: Apps recommend without disclaiming their limitations
+3. **Use AI recklessly**: Apps make medical claims or issue alerts without proper constraints or professional oversight
+4. **Confuse tools with advice**: Apps recommend without disclaiming their limitations
 
-MedicaLog takes a different approach: **be transparent about what you are, own what you control, and let users own their data.**
+MedicaLog takes a different approach: **be transparent about what you are, own what you control, include responsible AI, and let users own their data.**
+
+### AI and Trust
+
+Integrating AI into healthcare is high-risk. MedicaLog demonstrates that AI can be:
+- **Trustworthy**: Constrained analysis + explicit boundaries = no hidden claims
+- **Explainable**: Every insight traces back to specific user data and documented rules
+- **Accountable**: Analysis is persistent and auditable; users and professionals can review findings
+- **Safe**: Deterministic features and low/moderate signals prevent reckless medical claims
 
 This matters because:
-- **Trust is earned through honesty**: Users deserve to know exactly what an app does
+- **Trust is earned through honesty**: Users deserve to know exactly what an app and its AI do
+- **AI transparency prevents harm**: Explicit boundaries prevent users from making unsafe decisions
 - **Control is a human right**: People should always be able to correct, reset, or leave
-- **Architecture shapes ethics**: Server-first design prevents data abuse by default
+- **Architecture shapes ethics**: Server-first + constrained AI design prevents abuse by default
 
-This project demonstrates that ethical software can be as reliable, performant, and well-engineered as anything else.
+This project demonstrates that responsible AI and ethical software engineering are not nice-to-haves—they are essential.
 
 ---
 

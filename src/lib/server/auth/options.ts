@@ -10,6 +10,11 @@ import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import prisma from "@/lib/data/prisma";
 
+const DEMO_EMAIL = "kiruthickkannaa@gmail.com";
+const DEMO_PASSWORD = "mkk@9116";
+const MOCK_EMAIL = "demo@mock.local";
+const MOCK_PASSWORD = "demo1234";
+
 export const authOptions: NextAuthOptions = {
   // Ensure a secret is present for JWT encryption/decryption. In production
   // provide `NEXTAUTH_SECRET`. In development we use a stable fallback.
@@ -35,10 +40,6 @@ export const authOptions: NextAuthOptions = {
         async authorize(credentials) {
           const email = (credentials as any)?.email as string | undefined;
           const password = (credentials as any)?.password as string | undefined;
-
-          // Demo credentials that should work explicitly
-          const DEMO_EMAIL = "kiruthickkannaa@gmail.com";
-          const DEMO_PASSWORD = "mkk@9116";
 
           // If running in production, only allow the explicit demo credentials.
           if (process.env.NODE_ENV === "production") {
@@ -80,6 +81,28 @@ export const authOptions: NextAuthOptions = {
           if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
             const provider = "demo";
             const providerAccountId = DEMO_EMAIL;
+            const existingAccount = await prisma.account.findFirst({
+              where: { provider, providerAccountId },
+            });
+            if (existingAccount) {
+              return { id: existingAccount.userId } as any;
+            }
+            const user = await prisma.user.create({ data: {} });
+            await prisma.account.create({
+              data: {
+                userId: user.id,
+                type: "credentials",
+                provider,
+                providerAccountId,
+              },
+            });
+            return { id: user.id } as any;
+          }
+
+          // Development-only mock credential for review/validation
+          if (email === MOCK_EMAIL && password === MOCK_PASSWORD) {
+            const provider = "mock";
+            const providerAccountId = MOCK_EMAIL;
             const existingAccount = await prisma.account.findFirst({
               where: { provider, providerAccountId },
             });

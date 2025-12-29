@@ -74,9 +74,17 @@ export async function loginAction(input: LoginInput): Promise<LoginResult> {
  * Relies on forwarded cookies; no client auth state.
  */
 export async function logoutAction() {
-  const cookieHeader = cookies().toString();
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
+    .getAll()
+    .map(({ name, value }: { name: string; value: string }) => `${name}=${value}`)
+    .join("; ");
 
-  await fetch("/api/auth/signout?callbackUrl=/", {
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+  const host = process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).host : "localhost:3000";
+  const signoutUrl = `${protocol}://${host}/api/auth/signout?callbackUrl=/`;
+
+  await fetch(signoutUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",

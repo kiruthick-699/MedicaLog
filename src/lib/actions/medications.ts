@@ -21,6 +21,7 @@ import {
   validateIntakeStatus,
 } from "@/lib/validation/inputSchemas";
 import { mapToSafeError, ValidationError } from "@/lib/errors";
+import { regenerateSnapshotAsync } from "@/lib/ai/generateAwarenessSnapshot";
 import { redirect } from "next/navigation";
 
 export interface AddMedicationInput {
@@ -49,6 +50,11 @@ export async function addMedicationAction(input: AddMedicationInput): Promise<Ad
 
   try {
     const medication = await addMedication(user.id, { name: nameValidation.value });
+    
+    // Trigger async snapshot regeneration
+    regenerateSnapshotAsync(user.id, "30d").catch(() => {
+      // Silently ignore snapshot generation errors; user action succeeded
+    });
     
     // Success: redirect to the new medication detail page
     redirect(`/medications/${medication.id}?added=1`);
@@ -127,6 +133,11 @@ export async function logMedicationIntakeAction(input: LogMedicationIntakeInput)
       actualTime: null,
     });
 
+    // Trigger async snapshot regeneration
+    regenerateSnapshotAsync(user.id, "30d").catch(() => {
+      // Silently ignore snapshot generation errors; user action succeeded
+    });
+
     const to = input.redirectTo || `/medications/${input.medicationId}?intakeLogged=1`;
     redirect(to);
   } catch (err) {
@@ -170,6 +181,11 @@ export async function editMedicationNameAction(input: EditMedicationNameInput): 
     }
 
     await updateMedicationName(user.id, med.id, nameValidation.value);
+
+    // Trigger async snapshot regeneration
+    regenerateSnapshotAsync(user.id, "30d").catch(() => {
+      // Silently ignore snapshot generation errors; user action succeeded
+    });
 
     // Success: redirect to detail view with confirmation
     redirect(`/medications/${med.id}?updated=1`);
@@ -253,6 +269,11 @@ export async function addMedicationScheduleAction(
         userId: user.id,
       } as any);
 
+      // Trigger async snapshot regeneration
+      regenerateSnapshotAsync(user.id, "30d").catch(() => {
+        // Silently ignore snapshot generation errors; user action succeeded
+      });
+
       redirect(`/medications/${input.medicationId}?scheduleAdded=1`);
     } catch (err) {
       const safe = mapToSafeError(err, "Failed to add schedule");
@@ -278,6 +299,11 @@ export async function deleteMedicationAction(input: DeleteMedicationInput): Prom
     }
 
     const deletedName = await deleteMedicationAndSchedules(user.id, med.id);
+
+    // Trigger async snapshot regeneration
+    regenerateSnapshotAsync(user.id, "30d").catch(() => {
+      // Silently ignore snapshot generation errors; user action succeeded
+    });
 
     // Success: redirect to Manage Medications with a calm confirmation indicator
     const nameParam = encodeURIComponent(deletedName ?? "Medication");
@@ -352,6 +378,11 @@ export async function editMedicationScheduleAction(
       note: noteValidation.ok ? noteValidation.value : undefined,
     });
 
+    // Trigger async snapshot regeneration
+    regenerateSnapshotAsync(user.id, "30d").catch(() => {
+      // Silently ignore snapshot generation errors; user action succeeded
+    });
+
     redirect(`/medications/${input.medicationId}?scheduleUpdated=1`);
   } catch (err) {
     const safe = mapToSafeError(err, "Failed to update schedule");
@@ -388,6 +419,11 @@ export async function deleteMedicationScheduleAction(
     }
 
     await deleteMedicationSchedule(user.id, input.medicationId, input.scheduleId);
+
+    // Trigger async snapshot regeneration
+    regenerateSnapshotAsync(user.id, "30d").catch(() => {
+      // Silently ignore snapshot generation errors; user action succeeded
+    });
 
     redirect(`/medications/${input.medicationId}?scheduleDeleted=1`);
   } catch (err) {
