@@ -8,44 +8,45 @@ interface PageProps {
   }>;
 }
 
-async function validateDoctorAccess(patientId: string): Promise<{ hasAccess: boolean; status: "REVOKED" | "NO_CONSENT" | null }> {
-  const { doctorProfile } = await requireDoctor();
-
+async function assertDoctorHasAccess(doctorProfileId: string, patientId: string): Promise<void> {
   const grant = await prisma.doctorAccessGrant.findUnique({
     where: {
       doctorId_patientId: {
-        doctorId: doctorProfile.id,
+        doctorId: doctorProfileId,
         patientId,
       },
     },
   });
 
   if (!grant) {
-    return { hasAccess: false, status: "NO_CONSENT" };
+    throw new AuthError("No consent from this patient");
   }
 
   if (grant.revokedAt !== null) {
-    return { hasAccess: false, status: "REVOKED" };
+    throw new AuthError("Access has been revoked");
   }
+}
 
-  return { hasAccess: true, status: null };
+async function validateDoctorAccess(patientId: string): Promise<{ hasAccess: boolean; status: "REVOKED" | "NO_CONSENT" | null }> {
+  const { doctorProfile } = await requireDoctor();
+
+  try {
+    await assertDoctorHasAccess(doctorProfile.id, patientId);
+    return { hasAccess: true, status: null };
+  } catch (err) {
+    if (err instanceof AuthError) {
+      if (err.message.includes("revoked")) {
+        return { hasAccess: false, status: "REVOKED" };
+      }
+      return { hasAccess: false, status: "NO_CONSENT" };
+    }
+    throw err;
+  }
 }
 
 async function getMedicationAdherenceLogs(patientId: string) {
   const { doctorProfile } = await requireDoctor();
-
-  const grant = await prisma.doctorAccessGrant.findUnique({
-    where: {
-      doctorId_patientId: {
-        doctorId: doctorProfile.id,
-        patientId,
-      },
-    },
-  });
-
-  if (!grant || grant.revokedAt !== null) {
-    throw new AuthError("Access denied");
-  }
+  await assertDoctorHasAccess(doctorProfile.id, patientId);
 
   const logs = await prisma.medicationIntakeLog.findMany({
     where: { userId: patientId },
@@ -81,19 +82,7 @@ async function getMedicationAdherenceLogs(patientId: string) {
 
 async function getPatientMedications(patientId: string) {
   const { doctorProfile } = await requireDoctor();
-
-  const grant = await prisma.doctorAccessGrant.findUnique({
-    where: {
-      doctorId_patientId: {
-        doctorId: doctorProfile.id,
-        patientId,
-      },
-    },
-  });
-
-  if (!grant || grant.revokedAt !== null) {
-    throw new AuthError("Access denied");
-  }
+  await assertDoctorHasAccess(doctorProfile.id, patientId);
 
   const medications = await prisma.medication.findMany({
     where: { userId: patientId },
@@ -132,59 +121,128 @@ export default async function PatientLogsPage({ params }: PageProps) {
     );
   }
 
-  const { logs, metrics } = await getMedicationAdherenceLogs(patientId);
+  const [{ logs, metrics }, medications] = await Promise.all([
+    getMedicationAdherenceLogs(patientId),
+    getPatientMedications(patientId),
+  ]);
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Medicmetrics.totalScheduled}</div>
-            </div>
-            <div className="border rounded p-4">
-              <div className="text-sm text-gray-600">Total Taken</div>
-              <div className="text-2xl font-bold">{metrics.totalTaken}</div>
-            </div>
-            <div className="border rounded p-4">
-              <div className="text-sm text-gray-600">Total Missed</div>
-              <div className="text-2xl font-bold">{metrics.">Total Scheduled</div>
-              <div className="text-2xl font-bold">{totalScheduled}</div>
-            </div>
-            <div className="border rounded p-4">
-              <div className="text-sm text-gray-600">Total Taken</div>
-              <div className="text-2xl font-bold">{totalTaken}</div>
-            </div>
-            <div className="border rounded p-4">
-              <div className="text-sm text-gray-600">Total Missed</div>
-              <div className="text-2xl font-bold">{totalMissed}</div>
-            </div>
-          </div>
+      <h1 className="text-2xl font-bold mb-6">Patient Overview</h1>
 
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left p-4">Medication</th>
-                <th className="text-left p-4">Scheduled Time</th>
-                <th className="text-left p-4">Actual Intake Time</th>
-                <th className="text-left p-4">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((log: any) => (
-                <tr key={log.id} className="border-b hover:bg-gray-50">
-                  <td className="p-4">{log.medicationName}</td>
-                  <td className="p-4">
-                    {new Date(log.scheduledTime).toLocaleString()}
-                  </td>
-                  <td className="p-4">
-                    {log.actualIntakeTime 
-                      ? new Date(log.actualIntakeTime).toLocaleString()
-                      : '-'}
-                  </td>
-                  <td className="p-4">{log.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
+      {/* Medications Section */}
+      <section className="mb-10">
+        <h2 className="text-xl font-semibold mb-4">Medications & Schedules</h2>
+        {medications.length === 0 ? (
+          <p className="text-gray-500">No medications on record.</p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {medications.map((med) => (
+              <div key={med.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                <h3 className="font-medium text-lg mb-2">{med.name}</h3>
+                {med.schedules.length === 0 ? (
+                  <p className="text-sm text-gray-400">No schedules</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {med.schedules.map((schedule) => (
+                      <li key={schedule.id} className="text-sm text-gray-600">
+                        <span className="font-medium">{schedule.timeSlot}</span>
+                        {" · "}
+                        <span>{schedule.frequency}</span>
+                        {schedule.timing && (
+                          <span className="text-gray-400"> ({schedule.timing})</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Adherence Logs Section */}
+      <section>
+        <h2 className="text-xl font-semibold mb-4">Adherence Summary</h2>
+
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="border rounded p-4">
+            <div className="text-sm text-gray-600">Total Scheduled</div>
+            <div className="text-2xl font-bold">{metrics.totalScheduled}</div>
+          </div>
+          <div className="border rounded p-4">
+            <div className="text-sm text-gray-600">Total Taken</div>
+            <div className="text-2xl font-bold">{metrics.totalTaken}</div>
+          </div>
+          <div className="border rounded p-4">
+            <div className="text-sm text-gray-600">Total Missed</div>
+            <div className="text-2xl font-bold">{metrics.totalMissed}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* Intake History Section - Grouped by Date */}
+      <section className="mt-10">
+        <h2 className="text-xl font-semibold mb-4">Intake History</h2>
+
+        {logs.length === 0 ? (
+          <p className="text-gray-500">No intake logs recorded yet.</p>
+        ) : (
+          <div className="space-y-6">
+            {(() => {
+              // Group logs by date
+              const grouped = logs.reduce((acc, log) => {
+                const dateKey = new Date(log.scheduledTime).toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                });
+                if (!acc[dateKey]) acc[dateKey] = [];
+                acc[dateKey].push(log);
+                return acc;
+              }, {} as Record<string, typeof logs>);
+
+              return Object.entries(grouped).map(([date, dateLogs]) => (
+                <div key={date} className="border rounded-lg overflow-hidden">
+                  <div className="bg-gray-100 px-4 py-2 font-medium text-gray-700">
+                    {date}
+                  </div>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left p-3 text-sm font-medium text-gray-600">Medication</th>
+                        <th className="text-left p-3 text-sm font-medium text-gray-600">Schedule Slot</th>
+                        <th className="text-left p-3 text-sm font-medium text-gray-600">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dateLogs.map((log) => (
+                        <tr key={log.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                          <td className="p-3">{log.medicationName}</td>
+                          <td className="p-3">{log.timeSlot}</td>
+                          <td className="p-3">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                log.status === "TAKEN"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {log.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ));
+            })()}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -1,14 +1,8 @@
 import Link from 'next/link';
-
-async function getConsentedPatients() {
-  'use server';
-  
-  // TODO: Fetch patients with active consent grants from database
-  return [];
-}
+import { getMyConsentedPatients } from '@/lib/actions/doctor';
 
 export default async function DoctorPatientsPage() {
-  const patients = await getConsentedPatients();
+  const patients = await getMyConsentedPatients();
 
   return (
     <div className="p-8">
@@ -21,20 +15,20 @@ export default async function DoctorPatientsPage() {
           <thead>
             <tr className="border-b">
               <th className="text-left p-4">Patient</th>
-              <th className="text-left p-4">Consent Granted</th>
+              <th className="text-left p-4">Access Granted</th>
               <th className="text-left p-4">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {patients.map((patient: any) => (
-              <tr key={patient.id} className="border-b hover:bg-gray-50">
-                <td className="p-4">{patient.name || patient.id}</td>
+            {patients.map((patient) => (
+              <tr key={patient.grantId} className="border-b hover:bg-gray-50">
+                <td className="p-4">{patient.patientId}</td>
                 <td className="p-4">
-                  {new Date(patient.consentGrantedAt).toLocaleDateString()}
+                  {new Date(patient.grantedAt).toLocaleDateString()}
                 </td>
                 <td className="p-4">
                   <Link
-                    href={`/doctor/patients/${patient.id}/logs`}
+                    href={`/doctor/patients/${patient.patientId}`}
                     className="text-blue-600 hover:underline"
                   >
                     View Logs
