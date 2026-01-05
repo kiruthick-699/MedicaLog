@@ -57,3 +57,38 @@ export async function requireUser(options: RequireUserOptions = {}): Promise<Cur
     const { AuthError } = await import("@/lib/errors");
     throw new AuthError();
 }
+
+export type DoctorProfileData = {
+  id: string;
+  userId: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/**
+ * Ensures the current user is a doctor with an active DoctorProfile.
+ * Throws AuthError if not authenticated or not a doctor.
+ */
+export async function requireDoctor(): Promise<{ user: CurrentUser; doctorProfile: DoctorProfileData }> {
+  const user = await requireUser({ onFail: "throw" });
+
+  const prisma = (await import("@/lib/data/prisma")).default;
+  const doctorProfile = await prisma.doctorProfile.findUnique({
+    where: { userId: user.id },
+  });
+
+  if (!doctorProfile) {
+    const { AuthError } = await import("@/lib/errors");
+    throw new AuthError("Doctor access required");
+  }
+
+  return {
+    user,
+    doctorProfile: {
+      id: doctorProfile.id,
+      userId: doctorProfile.userId,
+      createdAt: doctorProfile.createdAt,
+      updatedAt: doctorProfile.updatedAt,
+    },
+  };
+}

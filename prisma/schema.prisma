@@ -23,15 +23,18 @@ enum IntakeStatus {
 
 // User: patient identity and timestamps
 model User {
-  id            String               @id @default(cuid())
-  conditions    DiagnosedCondition[]
-  medications   Medication[]
-  intakeLogs    MedicationIntakeLog[]
-  snapshots     AwarenessSnapshot[]
-  accounts      Account[]
-  sessions      Session[]
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  id              String               @id @default(cuid())
+  conditions      DiagnosedCondition[]
+  medications     Medication[]
+  intakeLogs      MedicationIntakeLog[]
+  snapshots       AwarenessSnapshot[]
+  accounts        Account[]
+  sessions        Session[]
+  doctorProfile   DoctorProfile?
+  accessRequests  DoctorAccessRequest[]
+  accessGrants    DoctorAccessGrant[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 }
 
 // DiagnosedCondition: user-entered condition with optional reference note
@@ -160,5 +163,54 @@ model AwarenessSnapshot {
 
   @@unique([userId, timeWindow])
   @@index([userId])
+}
+
+// DoctorAccessRequestStatus enum: status of a doctor access request
+enum DoctorAccessRequestStatus {
+  PENDING
+  DECLINED
+}
+
+// DoctorProfile: 1:1 link to User for doctor-specific identity
+model DoctorProfile {
+  id              String               @id @default(cuid())
+  userId          String               @unique
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessRequests  DoctorAccessRequest[]
+  accessGrants    DoctorAccessGrant[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+// DoctorAccessRequest: a doctor's pending or declined request to access a patient
+model DoctorAccessRequest {
+  id         String                    @id @default(cuid())
+  doctorId   String
+  doctor     DoctorProfile             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patientId  String
+  patient    User                      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  status     DoctorAccessRequestStatus @default(PENDING)
+  createdAt  DateTime                  @default(now())
+  updatedAt  DateTime                  @updatedAt
+
+  @@unique([doctorId, patientId])
+  @@index([doctorId])
+  @@index([patientId])
+}
+
+// DoctorAccessGrant: an active (or revoked) consent for a doctor to access a patient
+model DoctorAccessGrant {
+  id         String         @id @default(cuid())
+  doctorId   String
+  doctor     DoctorProfile  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patientId  String
+  patient    User           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  revokedAt  DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([doctorId, patientId])
+  @@index([doctorId])
+  @@index([patientId])
 }
 
