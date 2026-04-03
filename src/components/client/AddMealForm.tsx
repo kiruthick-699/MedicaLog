@@ -38,13 +38,12 @@ export function AddMealForm() {
         if (!result.ok && result.errors) {
           setErrors(result.errors);
         }
-        // On success, server action will redirect
       } catch (err: any) {
-        // Redirect throws are expected; only show actual errors
-        if (err?.digest?.includes("NEXT_REDIRECT")) {
+        // Ignore redirect errors - they indicate success
+        if (err?.message?.includes('NEXT_REDIRECT')) {
           return;
         }
-        setErrors([err?.message || "Failed to log meal"]);
+        setErrors(["Failed to log meal"]);
       }
     });
   };

@@ -19,18 +19,27 @@ export function AddScheduleForm({ medicationId }: { medicationId: string }) {
     setErrors([]);
 
     startTransition(async () => {
-      const result = await addMedicationScheduleAction({
-        medicationId,
-        timeSlot,
-        frequency,
-        timing,
-        note,
-      });
+      try {
+        const result = await addMedicationScheduleAction({
+          medicationId,
+          timeSlot,
+          frequency,
+          timing,
+          note,
+        });
 
-      if (!result.ok) {
-        setErrors(result.errors ?? ["Unable to add schedule"]);
+        if (!result.ok) {
+          setErrors(result.errors ?? ["Unable to add schedule"]);
+        }
+        // Success path redirects server-side back to medication detail
+      } catch (err: unknown) {
+        // Redirect errors are expected and should propagate (they're not real errors)
+        const error = err as any;
+        if (error?.digest?.includes("NEXT_REDIRECT")) {
+          return;
+        }
+        setErrors([error?.message || "An unexpected error occurred"]);
       }
-      // Success path redirects server-side back to medication detail
     });
   };
 
@@ -85,7 +94,7 @@ export function AddScheduleForm({ medicationId }: { medicationId: string }) {
           name="note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="w-full border border-black/20 bg-white px-3 py-2 text-sm text-black min-h-[96px]"
+          className="w-full border border-black/20 bg-white px-3 py-2 text-sm text-black min-h-24"
         />
       </div>
 

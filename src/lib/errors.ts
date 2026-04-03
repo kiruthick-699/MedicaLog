@@ -47,6 +47,8 @@ export class AuthError extends ControlledError {
 
 /**
  * Map any unknown error to a safe ServiceError while preserving original details server-side.
+ * NOTE: This function assumes redirect/notFound errors are handled before calling it.
+ * These errors should be re-thrown, not caught and converted to ServiceError.
  */
 export function mapToSafeError(err: unknown, fallbackMessage = "An unexpected error occurred") {
   // Log full error server-side for diagnostics
@@ -54,5 +56,13 @@ export function mapToSafeError(err: unknown, fallbackMessage = "An unexpected er
   console.error(err);
 
   if (err instanceof ControlledError) return err;
+  
+  // Check for Next.js redirect/notFound errors by their digest or name
+  // These should never be caught - they need to propagate to Next.js
+  const errObj = err as any;
+  if (errObj?.digest === "NEXT_REDIRECT" || errObj?.digest === "NEXT_NOT_FOUND") {
+    throw err;
+  }
+  
   return new ServiceError(fallbackMessage);
 }

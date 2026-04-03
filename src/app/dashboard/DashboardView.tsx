@@ -41,9 +41,12 @@ export default function DashboardView({ summary, adherenceRate, awarenessFlag, q
         <header className="space-y-3">
           <h1 id="dashboard-title" className="text-5xl font-bold text-black tracking-tight">Dashboard</h1>
           <p className="text-base text-black/70">Informational overview of your current data. No medical advice.</p>
-          <div className="pt-3">
-            <a href="/medications" className="inline-block border border-black px-3 py-2 text-sm font-medium">
+          <div className="pt-3 flex gap-3 flex-wrap">
+            <a href="/medications" className="inline-block border border-black px-3 py-2 text-sm font-medium hover:bg-black/5">
               Manage Medications
+            </a>
+            <a href="/wellness-report" className="inline-block border border-black px-3 py-2 text-sm font-medium hover:bg-black/5">
+              Wellness Report
             </a>
           </div>
         </header>

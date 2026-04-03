@@ -33,19 +33,27 @@ export function EditScheduleForm({
     setErrors([]);
 
     startTransition(async () => {
-      const result = await editMedicationScheduleAction({
-        medicationId,
-        scheduleId,
-        timeSlot,
-        frequency,
-        timing,
-        note,
-      });
+      try {
+        const result = await editMedicationScheduleAction({
+          medicationId,
+          scheduleId,
+          timeSlot,
+          frequency,
+          timing,
+          note,
+        });
 
-      if (!result.ok) {
-        setErrors(result.errors ?? ["Unable to save changes"]);
+        if (!result.ok) {
+          setErrors(result.errors ?? ["Unable to save changes"]);
+        }
+        // On success, server action redirects back to the medication detail page
+      } catch (err: any) {
+        // Redirect errors are expected and should propagate (they're not real errors)
+        if (err?.digest?.includes("NEXT_REDIRECT")) {
+          return;
+        }
+        setErrors([err?.message || "An unexpected error occurred"]);
       }
-      // On success, server action redirects back to the medication detail page
     });
   };
 
@@ -100,7 +108,7 @@ export function EditScheduleForm({
           name="note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="w-full border border-black/20 bg-white px-3 py-2 text-sm text-black min-h-[96px]"
+          className="w-full border border-black/20 bg-white px-3 py-2 text-sm text-black min-h-24"
         />
       </div>
 

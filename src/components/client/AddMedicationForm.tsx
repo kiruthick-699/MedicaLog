@@ -13,11 +13,18 @@ export function AddMedicationForm() {
     setErrors([]);
 
     startTransition(async () => {
-      const result = await addMedicationAction({ name });
-      if (!result.ok) {
-        setErrors(result.errors ?? ["Unable to add medication"]);
+      try {
+        const result = await addMedicationAction({ name });
+        if (!result.ok) {
+          setErrors(result.errors ?? ["Unable to add medication"]);
+        }
+      } catch (err: any) {
+        // Ignore redirect errors - they indicate success
+        if (err?.message?.includes('NEXT_REDIRECT')) {
+          return;
+        }
+        setErrors(["An unexpected error occurred"]);
       }
-      // On success, server action redirects to the medication detail page
     });
   };
 

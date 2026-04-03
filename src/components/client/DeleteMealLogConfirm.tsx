@@ -23,9 +23,9 @@ export function DeleteMealLogConfirm({ mealLogId }: DeleteMealLogConfirmProps) {
         if (!result.ok && result.errors) {
           setErrors(result.errors);
         }
-        // On success, server action will redirect
+        // On success, server action redirects to meals page
       } catch (err: any) {
-        // Redirect throws are expected
+        // Redirect errors are expected and should propagate (they're not real errors)
         if (err?.digest?.includes("NEXT_REDIRECT")) {
           return;
         }

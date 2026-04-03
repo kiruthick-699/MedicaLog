@@ -1,5 +1,6 @@
 import type { AwarenessSummaryData, AwarenessSnapshotData } from "@/lib/data/persistence";
 import { EmptyState } from "@/components/ui/EmptyState";
+import AIInsights from "@/components/client/AIInsights";
 
 type InsightsViewProps = {
   summary: AwarenessSummaryData;
@@ -51,6 +52,14 @@ export function InsightsView({ summary, adherenceRate, awarenessFlag, aiSnapshot
           <p className="text-lg text-black/75 leading-relaxed max-w-2xl">
             A neutral, informational view of your monitoring data. This page provides awareness only—no medical recommendations, diagnosis, or clinical guidance.
           </p>
+          <div className="pt-2 flex gap-3 flex-wrap">
+            <a href="/wellness-report" className="inline-block border border-black px-3 py-2 text-sm font-medium hover:bg-black/5">
+              Full Wellness Report
+            </a>
+            <a href="/dashboard" className="inline-block border border-black/20 px-3 py-2 text-sm font-medium hover:bg-black/5">
+              Back to Dashboard
+            </a>
+          </div>
         </header>
 
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" aria-label="Summary cards">
@@ -103,6 +112,8 @@ export function InsightsView({ summary, adherenceRate, awarenessFlag, aiSnapshot
           )}
         </section>
 
+        <AIInsights />
+
         {!hasMedications && !hasConditions && (
           <EmptyState
             title="No data yet"
@@ -154,8 +165,11 @@ export function InsightsView({ summary, adherenceRate, awarenessFlag, aiSnapshot
             </section>
 
             <section className="border-t border-b border-black/10 bg-white py-10 px-6" aria-label="Data recap">
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-black">Your Data Overview</h2>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-black">Your Data Overview</h2>
+                  <p className="text-sm text-black/70 mt-2">Summary of your current tracking setup</p>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
                   <div className="space-y-1">
                     <p className="text-4xl font-bold text-black">{summary.totalMedications}</p>
@@ -169,6 +183,15 @@ export function InsightsView({ summary, adherenceRate, awarenessFlag, aiSnapshot
                     <p className="text-4xl font-bold text-black">{summary.totalSchedules}</p>
                     <p className="text-sm text-black/70">Schedules</p>
                   </div>
+                </div>
+                <div className="border-t border-black/10 pt-6">
+                  <a 
+                    href="/wellness-report" 
+                    className="inline-block border border-black px-4 py-2 text-sm font-medium hover:bg-black/5 transition-colors"
+                  >
+                    Generate Wellness Report →
+                  </a>
+                  <p className="text-xs text-black/50 mt-3">View a comprehensive wellness awareness report with adherence summary, nutrition insights, and lifestyle patterns.</p>
                 </div>
               </div>
             </section>

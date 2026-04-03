@@ -22,11 +22,19 @@ export function EditConditionForm({
     setErrors([]);
 
     startTransition(async () => {
-      const result = await editConditionAction({ conditionId, name, note });
-      if (!result.ok) {
-        setErrors(result.errors ?? ["Unable to save changes"]);
+      try {
+        const result = await editConditionAction({ conditionId, name, note });
+        if (!result.ok) {
+          setErrors(result.errors ?? ["Unable to save changes"]);
+        }
+        // Success path redirects server-side to /conditions
+      } catch (err: any) {
+        // Redirect errors are expected and should propagate (they're not real errors)
+        if (err?.digest?.includes("NEXT_REDIRECT")) {
+          return;
+        }
+        setErrors([err?.message || "An unexpected error occurred"]);
       }
-      // Success path redirects server-side to /conditions
     });
   };
 
@@ -52,7 +60,7 @@ export function EditConditionForm({
           name="note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="w-full border border-black/20 bg-white px-3 py-2 text-sm text-black min-h-[96px]"
+          className="w-full border border-black/20 bg-white px-3 py-2 text-sm text-black min-h-24"
         />
       </div>
 
